@@ -1,6 +1,12 @@
 """
 MinerU Service - PDF to Markdown extraction.
-VERSION: DEBUG BUILD - Extensive logging enabled
+Based on official MinerU API documentation.
+
+Flow:
+1. POST /file-urls/batch → get batch_id + upload_url
+2. PUT upload_url with file data
+3. GET /extract-results/batch/{batch_id} → poll until extract_result exists
+4. Download full_zip_url → extract markdown from ZIP
 """
 
 import httpx
@@ -9,7 +15,9 @@ import asyncio
 import uuid
 import json
 import io
-import traceback
+import zipfile
+import tempfile
+import os
 from typing import Optional, Callable
 from config import settings
 from models.responses import DocumentStructure
@@ -23,31 +31,23 @@ def log(msg: str):
 
 
 def is_mineru_configured() -> bool:
-    """Check if any MinerU option is configured."""
-    local_url = getattr(settings, 'mineru_local_url', '')
+    """Check if MinerU API key is configured."""
     api_key = getattr(settings, 'mineru_api_key', '')
-    
-    log(f"Config check - local_url: '{local_url[:20] if local_url else 'NOT SET'}'")
-    log(f"Config check - api_key: '{api_key[:20] + '...' if api_key else 'NOT SET'}'")
-    
-    return bool(local_url) or bool(api_key)
+    configured = bool(api_key)
+    log(f"Config check - api_key: {'SET' if configured else 'NOT SET'}")
+    return configured
 
 
-def is_mineru_local() -> bool:
-    """Check if using local MinerU instance."""
-    local_url = getattr(settings, 'mineru_local_url', '')
-    return bool(local_url)
+# ==================== Step 1: Get Upload URL ====================
 
-
-# ==================== Cloud API Functions ====================
-
-async def get_cloud_upload_url(filename: str) -> tuple[str, str]:
-    """Request a pre-signed upload URL from MinerU Cloud."""
+async def get_upload_url(filename: str) -> tuple[str, str]:
+    """
+    Step 1: Request pre-signed upload URL from MinerU.
+    Returns (batch_id, upload_url)
+    """
     data_id = str(uuid.uuid4())[:8]
     
-    log(f"Requesting upload URL for: {filename}")
-    log(f"API Base: {settings.mineru_api_base}")
-    log(f"Token prefix: {settings.mineru_api_key[:30]}...")
+    log(f"Step 1: Requesting upload URL for: {filename}")
     
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
@@ -62,19 +62,19 @@ async def get_cloud_upload_url(filename: str) -> tuple[str, str]:
             }
         )
         
-        log(f"Upload URL request status: {response.status_code}")
-        log(f"Response body: {response.text[:500]}")
+        log(f"Response status: {response.status_code}")
         
         if response.status_code != 200:
-            raise Exception(f"MinerU Cloud API error: {response.status_code} - {response.text[:200]}")
+            raise Exception(f"MinerU API error: {response.status_code} - {response.text[:200]}")
         
         result = response.json()
+        log(f"Response: code={result.get('code')}, msg={result.get('msg')}")
+        
         if result.get("code") != 0:
             raise Exception(f"MinerU error: {result.get('msg')}")
         
-        data = result["data"]
-        batch_id = data["batch_id"]
-        upload_url = data["file_urls"][0]
+        batch_id = result["data"]["batch_id"]
+        upload_url = result["data"]["file_urls"][0]
         
         log(f"Got batch_id: {batch_id}")
         log(f"Got upload_url: {upload_url[:80]}...")
@@ -82,291 +82,219 @@ async def get_cloud_upload_url(filename: str) -> tuple[str, str]:
         return batch_id, upload_url
 
 
-async def upload_file_to_cloud(upload_url: str, file_content: bytes, filename: str) -> None:
-    """Upload file to MinerU Cloud's pre-signed URL.
-    Uses temp file + open() to match official example exactly.
+# ==================== Step 2: Upload File ====================
+
+async def upload_file(upload_url: str, file_content: bytes, filename: str) -> None:
     """
-    import tempfile
-    import os
-    
+    Step 2: Upload file to pre-signed URL.
+    Uses temp file + open() pattern from official example.
+    """
     file_size_mb = len(file_content) / (1024 * 1024)
-    log(f"Starting upload: {filename} ({file_size_mb:.2f} MB)")
-    log(f"Upload URL: {upload_url[:80]}...")
+    log(f"Step 2: Uploading {filename} ({file_size_mb:.2f} MB)")
     
-    # Save to temporary file first (matching official example pattern)
+    # Save to temp file (matching official example pattern)
     temp_path = None
     try:
-        # Create temp file
         fd, temp_path = tempfile.mkstemp(suffix='.pdf')
         os.write(fd, file_content)
         os.close(fd)
-        log(f"Created temp file: {temp_path}")
         
         def _upload():
-            # Use actual file handle like official example: open(file, 'rb') as f
+            # Official pattern: with open(file, 'rb') as f: requests.put(url, data=f)
             with open(temp_path, 'rb') as f:
-                log(f"Opened file handle, uploading...")
                 return requests.put(upload_url, data=f, timeout=600)
         
         loop = asyncio.get_event_loop()
-        
-        log("Executing upload in thread pool...")
-        start_time = asyncio.get_event_loop().time()
         response = await loop.run_in_executor(None, _upload)
-        elapsed = asyncio.get_event_loop().time() - start_time
         
-        log(f"Upload completed in {elapsed:.1f}s")
         log(f"Upload response status: {response.status_code}")
-        log(f"Upload response body: {response.text[:500] if response.text else '(empty)'}")
         
         if response.status_code != 200:
-            raise Exception(f"Cloud upload failed: {response.status_code} - {response.text[:200]}")
+            raise Exception(f"Upload failed: {response.status_code}")
+        
+        log("Upload successful!")
         
     finally:
-        # Clean up temp file
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
-            log(f"Cleaned up temp file")
+
+
+# ==================== Step 3: Poll Task Status ====================
+
+async def poll_task_status(batch_id: str, on_progress: Optional[Callable[[int], None]] = None) -> str:
+    """
+    Step 3: Poll task status until complete.
+    Returns full_zip_url when extract_result is available.
     
-    log("Upload successful!")
-
-
-async def poll_cloud_batch_status(batch_id: str, on_progress: Optional[Callable[[int], None]] = None) -> dict:
-    """Poll MinerU Cloud batch task status."""
+    IMPORTANT: Use /extract-results/batch/{batch_id} for batch uploads
+    (NOT /extract/task/{task_id} which is for single-file URL submissions)
+    """
     poll_interval = 5
     max_wait = 600
     elapsed = 0
     
-    log(f"Starting to poll batch: {batch_id}")
+    log(f"Step 3: Polling batch status for: {batch_id}")
     
     async with httpx.AsyncClient(timeout=30.0) as client:
         while elapsed < max_wait:
-            log(f"Polling... ({elapsed}s elapsed)")
+            response = await client.get(
+                f"{settings.mineru_api_base}/extract-results/batch/{batch_id}",
+                headers={"Authorization": f"Bearer {settings.mineru_api_key}"}
+            )
             
-            try:
-                response = await client.get(
-                    f"{settings.mineru_api_base}/extract-results/batch/{batch_id}",
-                    headers={"Authorization": f"Bearer {settings.mineru_api_key}"}
-                )
-                
-                log(f"Poll response status: {response.status_code}")
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    log(f"Poll response code: {result.get('code')}, msg: {result.get('msg')}")
-                    
-                    if result.get("code") == 0:
-                        data = result.get("data", {})
-                        extract_result = data.get("extract_result", [])
-                        state = data.get("state", "unknown")
-                        progress = data.get("progress", 0)
-                        
-                        log(f"State: {state}, Progress: {progress}%, Results: {len(extract_result)}")
-                        
-                        if extract_result and len(extract_result) > 0:
-                            log(f"Got results! Returning data...")
-                            log(f"Data keys: {list(data.keys())}")
-                            return data
-                    else:
-                        log(f"Non-zero code, continuing poll...")
-                else:
-                    log(f"Non-200 status, response: {response.text[:200]}")
-                    
-            except Exception as e:
-                log(f"Poll error: {e}")
+            if response.status_code != 200:
+                log(f"Poll error: {response.status_code}")
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
+                continue
             
-            await asyncio.sleep(poll_interval)
-            elapsed += poll_interval
+            result = response.json()
+            
+            if result.get("code") != 0:
+                log(f"API error: {result.get('msg')}")
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
+                continue
+            
+            data = result.get("data", {})
+            extract_result = data.get("extract_result", [])
+            
+            log(f"Polling... extract_result count: {len(extract_result)}")
             
             if on_progress:
-                on_progress(30 + min(50, elapsed // 10))
+                on_progress(30 + min(50, elapsed // 5))
+            
+            if extract_result:
+                first = extract_result[0]
+                state = first.get("state", "unknown")
+                
+                log(f"Task state: {state}")
+                
+                if state == "done":
+                    zip_url = first.get("full_zip_url")
+                    if zip_url:
+                        log(f"Task complete! ZIP URL: {zip_url[:80]}...")
+                        return zip_url
+                    else:
+                        # Try alternative field names
+                        log(f"Result keys: {first.keys()}")
+                        raise Exception("Task done but no ZIP URL found")
+                
+                if state == "failed":
+                    err_msg = first.get("err_msg", "Unknown error")
+                    raise Exception(f"MinerU extraction failed: {err_msg}")
+            
+            # Continue polling
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
     
-    raise Exception(f"MinerU Cloud task timed out after {max_wait}s")
+    raise Exception(f"Task timed out after {max_wait}s")
 
 
-async def extract_markdown_from_result(result_data: dict) -> str:
-    """Extract markdown content from MinerU result."""
-    log(f"Extracting markdown from result...")
-    log(f"Result data keys: {list(result_data.keys())}")
-    
-    extract_result = result_data.get("extract_result", [])
-    log(f"extract_result length: {len(extract_result)}")
-    
-    if not extract_result:
-        log("ERROR: No extract_result in data!")
-        log(f"Full result_data: {json.dumps(result_data, default=str)[:3000]}")
-        raise Exception("No extraction results")
-    
-    first_result = extract_result[0]
-    log(f"First result keys: {list(first_result.keys())}")
-    log(f"First result preview: {json.dumps(first_result, default=str)[:1000]}")
-    
-    # Try markdown URL first
-    md_url = first_result.get("full_md_url") or first_result.get("markdown_url")
-    log(f"Markdown URL: {md_url[:80] if md_url else 'NOT FOUND'}")
-    
-    if md_url:
-        log(f"Downloading markdown from URL...")
-        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-            response = await client.get(md_url)
-            log(f"Download status: {response.status_code}")
-            if response.status_code == 200:
-                content = response.text
-                log(f"Downloaded markdown, length: {len(content)}")
-                return content
-            else:
-                log(f"Download failed: {response.text[:200]}")
-    
-    # Try direct content
-    md_content = first_result.get("md_content") or first_result.get("markdown_content")
-    log(f"Direct md_content: {'Found, length=' + str(len(md_content)) if md_content else 'NOT FOUND'}")
-    
-    if md_content:
-        return md_content
-    
-    # Dump everything for debugging
-    log("ERROR: Could not find markdown in any field!")
-    log(f"FULL RESULT DUMP: {json.dumps(result_data, default=str)[:5000]}")
-    raise Exception("MinerU did not return markdown content")
+# ==================== Step 4: Download and Extract ZIP ====================
 
-
-# ==================== Local API Functions ====================
-
-async def extract_with_local_mineru(
-    file_content: bytes,
-    filename: str,
-    on_progress: Optional[Callable[[int], None]] = None
-) -> DocumentStructure:
-    """Extract using local MinerU API."""
-    local_url = settings.mineru_local_url.rstrip('/')
+async def download_and_extract_markdown(zip_url: str) -> str:
+    """
+    Step 4: Download ZIP and extract markdown content.
+    MinerU returns results in a ZIP file containing .md files.
+    """
+    log(f"Step 4: Downloading results from ZIP...")
     
-    log(f"LOCAL MODE: Extracting {filename} ({len(file_content)/1024/1024:.2f} MB)")
-    log(f"Local server: {local_url}")
-    
-    if on_progress:
-        on_progress(10)
-    
-    def _upload_and_parse():
-        return requests.post(
-            f"{local_url}/file_parse",
-            files={"files": (filename, file_content, "application/pdf")},
-            data={
-                "backend": "pipeline",
-                "parse_method": "auto",
-                "formula_enable": "true",
-                "table_enable": "true",
-                "return_md": "true",
-                "lang_list": "ch",
-            },
-            timeout=600
-        )
-    
-    loop = asyncio.get_event_loop()
-    
-    try:
-        log("Sending to local server...")
-        response = await loop.run_in_executor(None, _upload_and_parse)
-        
-        log(f"Local response status: {response.status_code}")
+    async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
+        response = await client.get(zip_url)
         
         if response.status_code != 200:
-            raise Exception(f"Local error: {response.status_code} - {response.text[:500]}")
+            raise Exception(f"Failed to download ZIP: {response.status_code}")
         
-        result = response.json()
-        results = result.get("results", {})
+        log(f"Downloaded ZIP: {len(response.content)} bytes")
         
-        if not results:
-            raise Exception("Local returned empty results")
+        # Extract markdown from ZIP
+        zip_buffer = io.BytesIO(response.content)
         
-        first_key = list(results.keys())[0]
-        file_result = results[first_key]
-        markdown_content = file_result.get("md_content", "")
-        
-        if not markdown_content:
-            raise Exception("Local did not return markdown content")
-        
-        log(f"Local extraction complete! Length: {len(markdown_content)}")
-        
-        if on_progress:
-            on_progress(100)
-        
-        return DocumentStructure(
-            text=markdown_content,
-            pages=max(1, len(markdown_content.split()) // 500),
-            word_count=len(markdown_content.split()),
-            language=detect_language(markdown_content)
-        )
-        
-    except requests.exceptions.ConnectionError as e:
-        raise Exception(f"Cannot connect to local server: {e}")
+        with zipfile.ZipFile(zip_buffer, 'r') as zf:
+            file_list = zf.namelist()
+            log(f"ZIP contains: {file_list}")
+            
+            # Find markdown file(s)
+            md_files = [f for f in file_list if f.endswith('.md')]
+            
+            if not md_files:
+                log(f"No .md files found, looking for alternatives...")
+                for name in file_list:
+                    log(f"  - {name}")
+                raise Exception("No markdown file found in ZIP")
+            
+            # Read the main markdown file
+            markdown_content = ""
+            for md_file in md_files:
+                content = zf.read(md_file).decode('utf-8')
+                markdown_content += content + "\n\n"
+                log(f"Extracted {md_file}: {len(content)} chars")
+            
+            return markdown_content.strip()
 
 
-# ==================== Cloud Extraction Function ====================
+# ==================== HTML Table to Markdown Conversion ====================
 
-async def extract_with_cloud_mineru(
-    file_content: bytes,
-    filename: str,
-    on_progress: Optional[Callable[[int], None]] = None
-) -> DocumentStructure:
-    """Extract using MinerU Cloud API."""
-    log(f"CLOUD MODE: Starting extraction for {filename}")
+def convert_html_tables_to_markdown(content: str) -> str:
+    """
+    Convert HTML <table> elements to Markdown table format.
+    MinerU sometimes outputs tables as HTML which is harder to translate.
+    """
+    import re
     
-    if on_progress:
-        on_progress(5)
+    def html_table_to_markdown(match: re.Match) -> str:
+        """Convert a single HTML table to Markdown."""
+        table_html = match.group(0)
+        
+        # Extract all rows
+        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', table_html, re.DOTALL | re.IGNORECASE)
+        if not rows:
+            return table_html  # Return original if can't parse
+        
+        markdown_rows = []
+        
+        for row_idx, row in enumerate(rows):
+            # Extract cells (both <td> and <th>)
+            cells = re.findall(r'<t[hd][^>]*>(.*?)</t[hd]>', row, re.DOTALL | re.IGNORECASE)
+            
+            # Clean cell content (remove HTML tags, normalize whitespace)
+            cleaned_cells = []
+            for cell in cells:
+                # Remove nested HTML tags
+                clean = re.sub(r'<[^>]+>', '', cell)
+                # Normalize whitespace
+                clean = ' '.join(clean.split())
+                # Escape pipe characters
+                clean = clean.replace('|', '\\|')
+                cleaned_cells.append(clean)
+            
+            if cleaned_cells:
+                # Build markdown row
+                md_row = '| ' + ' | '.join(cleaned_cells) + ' |'
+                markdown_rows.append(md_row)
+                
+                # Add separator after first row (header)
+                if row_idx == 0:
+                    separator = '|' + '|'.join(['---' for _ in cleaned_cells]) + '|'
+                    markdown_rows.append(separator)
+        
+        if markdown_rows:
+            return '\n'.join(markdown_rows)
+        return table_html  # Return original if conversion failed
     
-    try:
-        # Step 1: Get upload URL
-        log("=== STEP 1: Get upload URL ===")
-        batch_id, upload_url = await get_cloud_upload_url(filename)
-        
-        if on_progress:
-            on_progress(15)
-        
-        # Step 2: Upload file
-        log("=== STEP 2: Upload file ===")
-        await upload_file_to_cloud(upload_url, file_content, filename)
-        
-        if on_progress:
-            on_progress(30)
-        
-        # Step 3: Poll for results
-        log("=== STEP 3: Poll for results ===")
-        result_data = await poll_cloud_batch_status(batch_id, on_progress)
-        
-        if on_progress:
-            on_progress(90)
-        
-        # Step 4: Extract markdown
-        log("=== STEP 4: Extract markdown ===")
-        markdown_content = await extract_markdown_from_result(result_data)
-        
-        log(f"SUCCESS! Markdown length: {len(markdown_content)}")
-        
-        if on_progress:
-            on_progress(100)
-        
-        return DocumentStructure(
-            text=markdown_content,
-            pages=max(1, len(markdown_content.split()) // 500),
-            word_count=len(markdown_content.split()),
-            language=detect_language(markdown_content)
-        )
-        
-    except Exception as e:
-        log(f"CLOUD EXTRACTION FAILED: {e}")
-        log(f"Traceback: {traceback.format_exc()}")
-        raise
-
-
-# ==================== Helper Functions ====================
-
-def detect_language(text: str) -> str:
-    """Detect language based on Chinese character ratio."""
-    chinese_chars = len([c for c in text if '\u4e00' <= c <= '\u9fff'])
-    total_chars = len(text)
-    if total_chars > 0 and chinese_chars / total_chars > 0.1:
-        return "zh"
-    return "en"
+    # Find and replace all HTML tables
+    # Pattern matches <table>...</table> including nested content
+    pattern = r'<table[^>]*>.*?</table>'
+    result = re.sub(pattern, html_table_to_markdown, content, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Count conversions for logging
+    original_count = len(re.findall(r'<table', content, re.IGNORECASE))
+    remaining_count = len(re.findall(r'<table', result, re.IGNORECASE))
+    if original_count > 0:
+        log(f"Converted {original_count - remaining_count}/{original_count} HTML tables to Markdown")
+    
+    return result
 
 
 # ==================== Main Entry Point ====================
@@ -376,24 +304,75 @@ async def extract_with_mineru(
     filename: str,
     on_progress: Optional[Callable[[int], None]] = None
 ) -> DocumentStructure:
-    """Main extraction function."""
+    """
+    Main extraction function using MinerU Cloud API.
+    
+    Flow:
+    1. Request upload URL
+    2. Upload file
+    3. Poll for completion
+    4. Download and extract markdown from ZIP
+    """
     log("="*60)
-    log(f"EXTRACT_WITH_MINERU called for: {filename}")
-    log(f"File size: {len(file_content)} bytes ({len(file_content)/1024/1024:.2f} MB)")
+    log(f"EXTRACT_WITH_MINERU: {filename}")
+    log(f"File size: {len(file_content)/1024/1024:.2f} MB")
     log("="*60)
     
-    # Check configuration
     if not is_mineru_configured():
-        raise Exception("MinerU not configured. Set MINERU_LOCAL_URL or MINERU_API_KEY in .env")
+        raise Exception("MinerU API key not configured")
     
-    # Prefer local MinerU
-    if is_mineru_local():
-        log("Using LOCAL server")
-        return await extract_with_local_mineru(file_content, filename, on_progress)
-    
-    # Fall back to cloud API
-    if settings.mineru_api_key:
-        log("Using CLOUD API")
-        return await extract_with_cloud_mineru(file_content, filename, on_progress)
-    
-    raise Exception("No MinerU configuration found")
+    try:
+        # Step 1: Get upload URL
+        if on_progress:
+            on_progress(5)
+        batch_id, upload_url = await get_upload_url(filename)
+        
+        # Step 2: Upload file
+        if on_progress:
+            on_progress(15)
+        await upload_file(upload_url, file_content, filename)
+        
+        # Step 3: Poll for completion
+        if on_progress:
+            on_progress(30)
+        zip_url = await poll_task_status(batch_id, on_progress)
+        
+        # Step 4: Download and extract markdown
+        if on_progress:
+            on_progress(85)
+        markdown_content = await download_and_extract_markdown(zip_url)
+        
+        # Step 4.5: Convert HTML tables to Markdown
+        markdown_content = convert_html_tables_to_markdown(markdown_content)
+        
+        log(f"SUCCESS! Markdown length: {len(markdown_content)} chars")
+        
+        if on_progress:
+            on_progress(100)
+        
+        # Build result
+        language = detect_language(markdown_content)
+        word_count = len(markdown_content.split())
+        pages = max(1, word_count // 500)
+        
+        return DocumentStructure(
+            text=markdown_content,
+            pages=pages,
+            word_count=word_count,
+            language=language
+        )
+        
+    except Exception as e:
+        log(f"EXTRACTION FAILED: {e}")
+        raise
+
+
+# ==================== Helper ====================
+
+def detect_language(text: str) -> str:
+    """Detect language based on Chinese character ratio."""
+    chinese_chars = len([c for c in text if '\u4e00' <= c <= '\u9fff'])
+    total_chars = len(text)
+    if total_chars > 0 and chinese_chars / total_chars > 0.1:
+        return "zh"
+    return "en"

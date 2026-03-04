@@ -9,6 +9,8 @@ import EditingInterface from './components/EditingInterface';
 import RefinementSuggestions from './components/RefinementSuggestions';
 import UserGlossaryPanel from './components/UserGlossaryPanel';
 import SavedProjectsPanel from './components/SavedProjectsPanel'; // Import SavedProjectsPanel
+import GlossaryManager from './components/GlossaryManager'; // Backend Glossary Management
+import ReviewQueue from './components/ReviewQueue'; // Review Queue UI
 import ResumeModal from './components/ResumeModal';
 import DeveloperPanel from './components/DeveloperPanel'; // Import Developer Panel
 import { extractStandardTitle } from './services/documentParser';
@@ -20,7 +22,7 @@ import { storageService } from './services/storageService';
 import ApiKeyManager from './components/ApiKeyManager'; // Import Key Manager
 import type { GlossaryEntry, TranslatedChunk, TranslationProgress, AppStatus, Chunk, Project, TokenUsage } from './types';
 import TokenStats from './components/TokenStats'; // Import TokenStats component
-import { Book, FileText, Settings, AlertTriangle } from 'lucide-react'; // Added AlertTriangle
+import { Book, FileText, Settings, AlertTriangle, Wrench, ClipboardCheck, CheckCircle } from 'lucide-react';
 
 export default function App() {
     // Application State
@@ -38,6 +40,8 @@ export default function App() {
     const [pendingFile, setPendingFile] = useState<{ file: File, text: string } | null>(null);
     const [warningMessage, setWarningMessage] = useState<string | null>(null);
     const [showProjectsPanel, setShowProjectsPanel] = useState(false); // Persistence Panel State
+    const [showToolsPanel, setShowToolsPanel] = useState(false); // Tools Panel State
+    const [activeToolTab, setActiveToolTab] = useState<'glossary' | 'review'>('glossary');
     const [loadedDocument, setLoadedDocument] = useState<import('./types').DocumentStructure | null>(null);
     const [showUsePaidButton, setShowUsePaidButton] = useState(false); // Show "Use Paid API" button
 
@@ -48,6 +52,7 @@ export default function App() {
     const [editMode, setEditMode] = useState(false);
     const [currentEditPage, setCurrentEditPage] = useState(0);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [reviewComplete, setReviewComplete] = useState(false);  // User finished all editing pages
     const [lastAnalysis, setLastAnalysis] = useState<{
         pattern: RefinementPattern;
         affectedCount: number;
@@ -363,11 +368,24 @@ export default function App() {
     }, [translatedChunks, currentEditPage]);
 
     const handleEditSubmit = async (editedBatch: TranslatedChunk[]) => {
+        // Guard: Skip if no chunks to process
+        if (!editedBatch || editedBatch.length === 0 || !editingChunks || editingChunks.length === 0) {
+            console.log('[handleEditSubmit] No chunks to process, skipping');
+            return;
+        }
+
         setIsAnalyzing(true);
         try {
             // 1. Construct EditDiff
             const originalChunk = editingChunks[0];
             const editedChunk = editedBatch[0];
+
+            // Guard: Ensure chunks exist
+            if (!originalChunk || !editedChunk) {
+                console.log('[handleEditSubmit] Missing originalChunk or editedChunk');
+                setIsAnalyzing(false);  // Reset before returning
+                return;
+            }
 
             const diff = {
                 chunkId: originalChunk.id,
@@ -513,6 +531,16 @@ export default function App() {
                             <span className="hidden sm:inline font-medium">Projects</span>
                         </button>
 
+                        {/* Tools Toggle (Glossary & Review) */}
+                        <button
+                            onClick={() => setShowToolsPanel(true)}
+                            className="flex items-center gap-2 px-3 py-2 text-slate-600 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                            title="Tools"
+                        >
+                            <Wrench className="w-5 h-5" />
+                            <span className="hidden sm:inline font-medium">Tools</span>
+                        </button>
+
                         {/* API Key Manager */}
                         <ApiKeyManager
                             onKeysUpdated={handleApiKeysUpdated}
@@ -643,8 +671,28 @@ export default function App() {
                     </div>
                 )}
 
-                {/* Main Content Area - Translation View */}
-                {(status === 'complete' || status === 'translating') && !editMode && (
+                {/* Translation Complete Indicator */}
+                {reviewComplete && (
+                    <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-8 shadow-lg text-center">
+                        <div className="flex justify-center mb-4">
+                            <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg">
+                                <CheckCircle className="w-12 h-12 text-white" />
+                            </div>
+                        </div>
+                        <h2 className="text-2xl font-bold mb-2 text-emerald-800">Translation Review Complete!</h2>
+                        <p className="text-emerald-700 text-lg mb-4">
+                            All chunks have been reviewed and refined. Your translation is ready for export.
+                        </p>
+                        <div className="flex justify-center gap-2 text-sm">
+                            <span className="px-3 py-1 bg-emerald-200 text-emerald-800 rounded-full font-medium">
+                                {translatedChunks.length} chunks translated
+                            </span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Main Content Area - Translation View (hidden when review complete) */}
+                {(status === 'complete' || status === 'translating') && !editMode && !reviewComplete && (
                     <>
                         <div className="flex justify-end">
                             {status === 'complete' && (
@@ -683,6 +731,11 @@ export default function App() {
                             totalPages={Math.ceil(translatedChunks.length / 4)}
                             onSubmit={handleEditSubmit}
                             onNavigate={setCurrentEditPage}
+                            onReviewComplete={() => {
+                                console.log('[App] Review complete - exiting edit mode');
+                                setEditMode(false);
+                                setReviewComplete(true);
+                            }}
                             isAnalyzing={isAnalyzing}
                         />
 
@@ -691,8 +744,8 @@ export default function App() {
                     </div>
                 )}
 
-                {/* Footer Controls */}
-                {status === 'complete' && (
+                {/* Footer Controls - Show when translation complete or review finished */}
+                {(status === 'complete' || reviewComplete) && (
                     <ExportOptions
                         translatedChunks={translatedChunks}
                     />
@@ -705,6 +758,70 @@ export default function App() {
                 onLoadProject={loadProject}
                 currentProjectId={currentProject?.id}
             />
+
+            {/* Tools Panel (Glossary & Review Queue) */}
+            {showToolsPanel && (
+                <div className="fixed inset-0 z-50 flex">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-black/50"
+                        onClick={() => setShowToolsPanel(false)}
+                    />
+
+                    {/* Panel */}
+                    <div className="absolute right-0 top-0 h-full w-full max-w-xl bg-slate-900 shadow-2xl overflow-y-auto">
+                        {/* Panel Header */}
+                        <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-4 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <Wrench className="w-6 h-6 text-violet-400" />
+                                <h2 className="text-xl font-bold text-white">Tools</h2>
+                            </div>
+                            <button
+                                onClick={() => setShowToolsPanel(false)}
+                                className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 6L6 18M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex border-b border-slate-700">
+                            <button
+                                onClick={() => setActiveToolTab('glossary')}
+                                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 font-medium transition-colors ${activeToolTab === 'glossary'
+                                    ? 'text-violet-400 border-b-2 border-violet-400 bg-slate-800/50'
+                                    : 'text-slate-400 hover:text-white hover:bg-slate-800/30'
+                                    }`}
+                            >
+                                <Book className="w-4 h-4" />
+                                Glossary
+                            </button>
+                            <button
+                                onClick={() => setActiveToolTab('review')}
+                                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 font-medium transition-colors ${activeToolTab === 'review'
+                                    ? 'text-violet-400 border-b-2 border-violet-400 bg-slate-800/50'
+                                    : 'text-slate-400 hover:text-white hover:bg-slate-800/30'
+                                    }`}
+                            >
+                                <ClipboardCheck className="w-4 h-4" />
+                                Review Queue
+                            </button>
+                        </div>
+
+                        {/* Tab Content */}
+                        <div className="p-4">
+                            {activeToolTab === 'glossary' && (
+                                <GlossaryManager />
+                            )}
+                            {activeToolTab === 'review' && (
+                                <ReviewQueue />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Resume Modal */}
             {showResumeModal && resumableProject && (

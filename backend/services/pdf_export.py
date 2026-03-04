@@ -97,10 +97,8 @@ class ChinesePDF(FPDF):
         return ''.join(c if ord(c) < 128 else '[?]' for c in text)
         
     def header(self):
-        """Page header with document title."""
-        self.set_font(self.font_family_name, "", 9)
-        self.set_text_color(128, 128, 128)
-        self.cell(0, 10, "Technical Translation", 0, align="R", new_x="LMARGIN", new_y="NEXT")
+        """Page header - empty to preserve original document structure."""
+        pass  # No header text - preserve original structure
         
     def footer(self):
         """Page footer with page number."""
@@ -208,14 +206,16 @@ def generate_translation_pdf(
     font_path = get_chinese_font_path()
     
     pdf = ChinesePDF(font_path)
+    
+    # Set PDF document metadata (not visible on page, but in document properties)
+    from datetime import datetime
+    pdf.set_title(title)
+    pdf.set_author("Guided Translator")
+    pdf.set_creation_date(datetime.now())
+    
     pdf.add_page()
     
-    # Title and metadata
-    pdf.add_title(title)
-    
-    from datetime import datetime
-    pdf.add_metadata(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    pdf.ln(5)
+    # No visible header - preserve original document structure
     
     # Render each chunk
     for i, chunk in enumerate(chunks):
@@ -235,7 +235,8 @@ def generate_translation_pdf(
         else:
             pdf.render_markdown(translation)
     
-    return pdf.output()
+    # fpdf2's output() returns bytearray, convert to bytes
+    return bytes(pdf.output())
 
 
 # Test function

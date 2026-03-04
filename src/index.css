@@ -51,3 +51,33 @@ body {
 .term-match:hover {
   opacity: 0.8;
 }
+
+/* Document content styles - larger fonts for readability */
+.doc-content {
+  font-family: Georgia, 'Times New Roman', 'Noto Serif', serif;
+  font-size: 18px;
+  line-height: 1.8;
+  color: #1e293b;
+}
+
+.doc-content-zh {
+  font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', 'PingFang SC', sans-serif;
+}
+
+/* Ensure proper rendering of CJK characters */
+.doc-content-zh {
+  font-feature-settings: "kern" 1;
+  text-rendering: optimizeLegibility;
+}
+
+/* Review queue text styles */
+.review-content {
+  font-size: 16px !important;
+  line-height: 1.7 !important;
+}
+
+.review-textarea {
+  font-size: 16px !important;
+  line-height: 1.7 !important;
+  font-family: 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif !important;
+}

@@ -19,31 +19,65 @@ export default function TranslationPanel({ chunks, isTranslating = false }: Tran
     };
 
     /**
-     * Highlight terms in text
+     * Convert markdown images to HTML img tags
+     * Handles: ![alt](url) and ![](url) patterns
+     */
+    const renderMarkdownImages = (text: string): string => {
+        // Match markdown image syntax: ![alt text](url)
+        const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+
+        return text.replace(imageRegex, (_match, alt, url) => {
+            // Create a placeholder that won't be escaped
+            // Using data attributes for the actual render
+            return `__IMG_START__${url}__IMG_ALT__${alt || 'image'}__IMG_END__`;
+        });
+    };
+
+    /**
+     * Convert image placeholders back to actual img tags (after HTML escaping)
+     */
+    const restoreImages = (text: string): string => {
+        const placeholderRegex = /__IMG_START__(.+?)__IMG_ALT__(.+?)__IMG_END__/g;
+
+        return text.replace(placeholderRegex, (_match, url, alt) => {
+            return `<img src="${url}" alt="${alt}" class="max-w-full h-auto rounded-lg my-2 border border-slate-200" loading="lazy" />`;
+        });
+    };
+
+    /**
+     * Highlight terms in text and render images
      */
     const highlightTerms = (text: string, matches: TermMatch[], isTranslation: boolean = false) => {
-        if (matches.length === 0) return escapeHtml(text);
+        // First, extract images and replace with placeholders
+        const textWithPlaceholders = renderMarkdownImages(text);
 
-        const escapedText = escapeHtml(text);
+        // Then escape HTML (placeholders are safe ASCII)
+        const escapedText = escapeHtml(textWithPlaceholders);
         let result = escapedText;
 
-        // For translation, we need to match the Chinese terms
-        const termsToHighlight = isTranslation
-            ? matches.map(m => ({ term: m.chinese, tooltip: m.english, type: m.source }))
-            : matches.map(m => ({ term: m.english, tooltip: m.chinese, type: m.source }));
+        // Apply term highlighting
+        if (matches.length > 0) {
+            // For translation, we need to match the Chinese terms
+            const termsToHighlight = isTranslation
+                ? matches.map(m => ({ term: m.chinese, tooltip: m.english, type: m.source }))
+                : matches.map(m => ({ term: m.english, tooltip: m.chinese, type: m.source }));
 
-        // Sort by length descending to avoid partial matches inside longer matches
-        const sortedTerms = [...new Set(termsToHighlight)].sort((a, b) => b.term.length - a.term.length);
+            // Sort by length descending to avoid partial matches inside longer matches
+            const sortedTerms = [...new Set(termsToHighlight)].sort((a, b) => b.term.length - a.term.length);
 
-        for (const item of sortedTerms) {
-            const escapedTerm = escapeHtml(item.term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(escapedTerm, 'g');
+            for (const item of sortedTerms) {
+                const escapedTerm = escapeHtml(item.term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(escapedTerm, 'g');
 
-            const colorClass = item.type === 'glossary' ? 'term-match-glossary' : 'term-match-new';
+                const colorClass = item.type === 'glossary' ? 'term-match-glossary' : 'term-match-new';
 
-            // Use a temporary placeholder to avoid double-highlighting
-            result = result.replace(regex, `<mark class="term-match ${colorClass}" title="${escapeHtml(item.tooltip)}">${item.term}</mark>`);
+                // Use a temporary placeholder to avoid double-highlighting
+                result = result.replace(regex, `<mark class="term-match ${colorClass}" title="${escapeHtml(item.tooltip)}">${item.term}</mark>`);
+            }
         }
+
+        // Finally, restore images from placeholders
+        result = restoreImages(result);
 
         return result;
     };
@@ -87,12 +121,12 @@ export default function TranslationPanel({ chunks, isTranslating = false }: Tran
             <div className="flex-grow overflow-y-auto p-6 bg-slate-50/30">
                 <div className="space-y-4">
                     {chunks.map((chunk, index) => (
-                        <div key={chunk.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col md:grid md:grid-cols-2">
+                        <div key={chunk.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col md:grid md:grid-cols-2 items-stretch">
                             {/* Original Text */}
-                            <div className="p-4 border-b md:border-b-0 md:border-r border-slate-100 bg-slate-50/50">
+                            <div className="p-4 border-b md:border-b-0 md:border-r border-slate-100 bg-slate-50/50 h-full">
                                 <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-2 font-mono">Chunk {index + 1}</div>
                                 <div
-                                    className={`${chunk.type === 'heading' ? 'font-bold text-lg text-slate-900' : 'text-slate-700'} leading-relaxed`}
+                                    className={`doc-content ${chunk.type === 'heading' ? 'font-bold text-lg' : ''}`}
                                     dangerouslySetInnerHTML={{
                                         __html: highlightTerms(chunk.text, chunk.matchedTerms, false)
                                     }}
@@ -100,10 +134,10 @@ export default function TranslationPanel({ chunks, isTranslating = false }: Tran
                             </div>
 
                             {/* Translated Text */}
-                            <div className="p-4 bg-white">
+                            <div className="p-4 bg-white h-full">
                                 <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-2 font-mono md:text-right">段落 {index + 1}</div>
                                 <div
-                                    className={`${chunk.type === 'heading' ? 'font-bold text-lg text-slate-900' : 'text-slate-700'} leading-relaxed`}
+                                    className={`doc-content doc-content-zh ${chunk.type === 'heading' ? 'font-bold text-lg' : ''}`}
                                     dangerouslySetInnerHTML={{
                                         __html: highlightTerms(chunk.translation, chunk.matchedTerms, true)
                                     }}

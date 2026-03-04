@@ -382,3 +382,168 @@ export async function exportPdf(request: ExportPdfRequest): Promise<Blob> {
 
     return response.blob();
 }
+
+// ============ Glossary Management ============
+
+export interface GlossaryTerm {
+    id?: number;
+    english: string;
+    chinese: string;
+    notes?: string;
+    category?: string;
+}
+
+export interface GlossaryUploadResult {
+    success: boolean;
+    terms_added: number;
+    terms_updated: number;
+    errors: string[];
+}
+
+/**
+ * Upload a CSV file with glossary terms
+ */
+export async function uploadGlossary(file: File): Promise<GlossaryUploadResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE}/api/glossary/upload`, {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Glossary upload failed: ${errorText}`);
+    }
+
+    return response.json();
+}
+
+/**
+ * List all glossary terms with optional filters
+ */
+export async function listGlossary(
+    category?: string,
+    search?: string
+): Promise<GlossaryTerm[]> {
+    const params = new URLSearchParams();
+    if (category) params.append('category', category);
+    if (search) params.append('search', search);
+
+    const queryString = params.toString();
+    const url = queryString ? `/api/glossary?${queryString}` : '/api/glossary';
+
+    return apiFetch<GlossaryTerm[]>(url);
+}
+
+/**
+ * Get all unique categories
+ */
+export async function listGlossaryCategories(): Promise<string[]> {
+    return apiFetch<string[]>('/api/glossary/categories');
+}
+
+/**
+ * Create a new glossary term
+ */
+export async function createGlossaryTerm(term: GlossaryTerm): Promise<GlossaryTerm> {
+    return apiFetch<GlossaryTerm>('/api/glossary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(term),
+    });
+}
+
+/**
+ * Update an existing glossary term
+ */
+export async function updateGlossaryTerm(id: number, term: GlossaryTerm): Promise<GlossaryTerm> {
+    return apiFetch<GlossaryTerm>(`/api/glossary/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(term),
+    });
+}
+
+/**
+ * Delete a glossary term
+ */
+export async function deleteGlossaryTerm(id: number): Promise<void> {
+    await apiFetch(`/api/glossary/${id}`, { method: 'DELETE' });
+}
+
+/**
+ * Clear all glossary terms (use with caution!)
+ */
+export async function clearGlossary(): Promise<void> {
+    await apiFetch('/api/glossary/clear', { method: 'DELETE' });
+}
+
+// ============ Review Queue ============
+
+export interface ReviewNode {
+    id: number;
+    document_id: number;
+    index: number;
+    content: string;
+    translation: string | null;
+    state: 'pending' | 'translating' | 'review' | 'approved' | 'completed' | 'failed';
+    confidence: number | null;
+    block_type: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface DocumentStats {
+    total_nodes: number;
+    pending: number;
+    translating: number;
+    review: number;
+    approved: number;
+    completed: number;
+    failed: number;
+    progress_percent: number;
+}
+
+/**
+ * Get nodes needing review
+ */
+export async function getReviewQueue(documentId?: number): Promise<ReviewNode[]> {
+    const url = documentId
+        ? `/api/review/queue?document_id=${documentId}`
+        : '/api/review/queue';
+    return apiFetch<ReviewNode[]>(url);
+}
+
+/**
+ * Approve a node's translation
+ */
+export async function approveNode(nodeId: number): Promise<void> {
+    await apiFetch(`/api/review/${nodeId}/approve`, { method: 'POST' });
+}
+
+/**
+ * Edit a node's translation
+ */
+export async function editNode(nodeId: number, translation: string): Promise<void> {
+    await apiFetch(`/api/review/${nodeId}/edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ translation }),
+    });
+}
+
+/**
+ * Request re-translation of a node
+ */
+export async function retranslateNode(nodeId: number): Promise<void> {
+    await apiFetch(`/api/review/${nodeId}/retranslate`, { method: 'POST' });
+}
+
+/**
+ * Get document translation statistics
+ */
+export async function getDocumentStats(documentId: number): Promise<DocumentStats> {
+    return apiFetch<DocumentStats>(`/api/review/stats/${documentId}`);
+}

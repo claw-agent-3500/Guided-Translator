@@ -1,0 +1,266 @@
+/* Print Stylesheet for PDF Export via Paged.js */
+
+/* Base page setup */
+@page {
+    size: A4;
+    margin: 2cm 2.5cm;
+}
+
+/* First page - title page styling */
+@page: first {
+    margin-top: 4cm;
+}
+
+/* Page counter in footer */
+@page {
+    @bottom-center {
+        content: counter(page) " / " counter(pages);
+        font-size: 10pt;
+        color: #666;
+    }
+}
+
+/* Running header with document title */
+@page {
+    @top-left {
+        content: string(doc-title);
+        font-size: 9pt;
+        color: #888;
+    }
+}
+
+/* Print container */
+.print-document {
+    font-family: "Noto Sans SC", "Microsoft YaHei", "SimSun", sans-serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: #1a1a1a;
+}
+
+/* Document title - captured for running header */
+.print-document .doc-title {
+    string-set: doc-title content();
+    font-size: 24pt;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 2cm;
+    color: #333;
+}
+
+/* Headings */
+.print-document h1 {
+    font-size: 18pt;
+    font-weight: 700;
+    margin: 1.5em 0 0.5em 0;
+    color: #1a365d;
+    page-break-after: avoid;
+}
+
+.print-document h2 {
+    font-size: 14pt;
+    font-weight: 600;
+    margin: 1.2em 0 0.4em 0;
+    color: #2a4365;
+    page-break-after: avoid;
+}
+
+.print-document h3 {
+    font-size: 12pt;
+    font-weight: 600;
+    margin: 1em 0 0.3em 0;
+    color: #2c5282;
+    page-break-after: avoid;
+}
+
+/* Paragraphs */
+.print-document p {
+    margin: 0.5em 0;
+    text-align: justify;
+    orphans: 3;
+    widows: 3;
+}
+
+/* Lists */
+.print-document ul,
+.print-document ol {
+    margin: 0.5em 0;
+    padding-left: 2em;
+}
+
+.print-document li {
+    margin: 0.3em 0;
+}
+
+/* Tables */
+.print-document table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+    page-break-inside: avoid;
+}
+
+.print-document th,
+.print-document td {
+    border: 1px solid #d1d5db;
+    padding: 0.5em;
+    text-align: left;
+    font-size: 10pt;
+}
+
+.print-document th {
+    background-color: #f3f4f6;
+    font-weight: 600;
+}
+
+/* Code blocks */
+.print-document pre,
+.print-document code {
+    font-family: "Consolas", "Monaco", monospace;
+    font-size: 9pt;
+    background-color: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.print-document pre {
+    padding: 1em;
+    margin: 0.5em 0;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    page-break-inside: avoid;
+}
+
+.print-document code {
+    padding: 0.2em 0.4em;
+}
+
+/* Chunk separator (for visual debugging, hidden in print) */
+.print-document .chunk-separator {
+    display: none;
+}
+
+/* =========================
+   BILINGUAL LAYOUT
+   ========================= */
+
+.print-document.bilingual {
+    font-size: 10pt;
+}
+
+.print-document.bilingual .bilingual-row {
+    display: flex;
+    gap: 1.5em;
+    margin-bottom: 1em;
+    page-break-inside: avoid;
+}
+
+.print-document.bilingual .original-column {
+    flex: 1;
+    padding-right: 1em;
+    border-right: 1px solid #e0e0e0;
+    color: #555;
+    font-style: italic;
+}
+
+.print-document.bilingual .translation-column {
+    flex: 1;
+    padding-left: 1em;
+    color: #1a1a1a;
+}
+
+.print-document.bilingual .column-header {
+    font-weight: 600;
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #888;
+    margin-bottom: 0.5em;
+}
+
+/* =========================
+   SCREEN PREVIEW STYLES
+   ========================= */
+
+@media screen {
+    .print-preview-container {
+        max-width: 210mm;
+        margin: 0 auto;
+        padding: 2cm;
+        background: white;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        min-height: 297mm;
+    }
+
+    .print-document {
+        background: white;
+    }
+
+    .page-break-preview {
+        border-bottom: 2px dashed #3b82f6;
+        margin: 2em 0;
+        position: relative;
+    }
+
+    .page-break-preview::after {
+        content: "Page Break";
+        position: absolute;
+        right: 0;
+        top: -0.5em;
+        font-size: 10px;
+        color: #3b82f6;
+        background: white;
+        padding: 0 0.5em;
+    }
+}
+
+/* Hide in print - Comprehensive rules for Smart PDF Export */
+@media print {
+
+    /* Hide everything by default */
+    body>*:not(.pagedjs_pages) {
+        display: none !important;
+    }
+
+    /* Hide modal backdrop and controls */
+    .fixed,
+    [class*="backdrop"],
+    [class*="modal"],
+    .no-print,
+    .print-controls,
+    header,
+    footer,
+    nav,
+    aside,
+    button,
+    [role="dialog"] {
+        display: none !important;
+    }
+
+    /* Show only the print content */
+    .pagedjs_pages,
+    .pagedjs_page,
+    .print-document {
+        display: block !important;
+        visibility: visible !important;
+    }
+
+    /* Reset body for print */
+    body {
+        background: white !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* Ensure content fills page */
+    .pagedjs_pages {
+        width: 100% !important;
+        margin: 0 !important;
+    }
+
+    /* Hide the preview container wrapper */
+    .print-preview-container {
+        box-shadow: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+}

@@ -1,9 +1,10 @@
 // Export Options Component
 import { useState } from 'react';
-import { Download, FileText, File, Loader2 } from 'lucide-react';
+import { Download, FileText, File, Loader2, Sparkles, FileDown } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import type { TranslatedChunk } from '../types';
 import { reassembleChunks } from '../services/chunkManager';
+import PrintExportModal from './PrintExportModal';
 
 interface ExportOptionsProps {
     translatedChunks: TranslatedChunk[];
@@ -16,6 +17,7 @@ export default function ExportOptions({ translatedChunks }: ExportOptionsProps) 
 
     const [isExporting, setIsExporting] = useState(false);
     const [exportProgress, setExportProgress] = useState(0);
+    const [showSmartPdfModal, setShowSmartPdfModal] = useState(false);
 
     const handleExportPDF = async () => {
         setIsExporting(true);
@@ -87,6 +89,18 @@ export default function ExportOptions({ translatedChunks }: ExportOptionsProps) 
         const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
         saveAs(blob, filename);
         console.log('✅ Download triggered:', filename);
+    };
+
+    const handleExportOriginalMD = () => {
+        // Reassemble original MinerU markdown from chunk text
+        const originalMd = translatedChunks
+            .map(chunk => chunk.text)
+            .join('\n\n');
+
+        const blob = new Blob([originalMd], { type: 'text/markdown;charset=utf-8' });
+        const filename = `original_mineru_${Date.now()}.md`;
+        saveAs(blob, filename);
+        console.log('✅ Original MinerU MD downloaded:', filename);
     };
 
     const handleExportNewTerms = () => {
@@ -212,6 +226,20 @@ export default function ExportOptions({ translatedChunks }: ExportOptionsProps) 
                         </div>
                     </div>
                 </button>
+
+                {/* Original MinerU Output */}
+                <button
+                    onClick={handleExportOriginalMD}
+                    className="flex items-center justify-between p-4 border border-orange-200 bg-orange-50/50 rounded-lg hover:border-orange-500 hover:bg-orange-50 transition-all group"
+                >
+                    <div className="flex items-center gap-3">
+                        <FileDown className="w-5 h-5 text-orange-600" />
+                        <div className="text-left">
+                            <p className="font-medium text-slate-800">Original (MinerU MD)</p>
+                            <p className="text-xs text-slate-500">Pre-translation source markdown</p>
+                        </div>
+                    </div>
+                </button>
             </div>
 
             <div className="mt-6 p-4 bg-amber-50 rounded-xl border border-amber-100 flex gap-3">
@@ -221,6 +249,26 @@ export default function ExportOptions({ translatedChunks }: ExportOptionsProps) 
                     This creates a virtuous cycle of terminology improvement!
                 </p>
             </div>
+
+            {/* Smart PDF Export Button - Full Width */}
+            <button
+                onClick={() => setShowSmartPdfModal(true)}
+                className="mt-4 w-full flex items-center justify-center gap-3 p-4 border-2 border-violet-300 bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl hover:border-violet-500 hover:shadow-lg transition-all group"
+            >
+                <Sparkles className="w-6 h-6 text-violet-600" />
+                <div className="text-left">
+                    <p className="font-semibold text-violet-800">Smart PDF Export</p>
+                    <p className="text-xs text-violet-600">Preview with pagination • Bilingual mode • Advanced layout</p>
+                </div>
+            </button>
+
+            {/* Smart PDF Modal */}
+            <PrintExportModal
+                isOpen={showSmartPdfModal}
+                onClose={() => setShowSmartPdfModal(false)}
+                chunks={translatedChunks}
+                onBackendExport={handleExportPDF}
+            />
         </div>
     );
 }

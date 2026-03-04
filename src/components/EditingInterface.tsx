@@ -1,7 +1,7 @@
 // Editing Interface Component
 // Display 3-4 chunks at once with side-by-side English/Chinese view
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Edit3, Save, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import type { TranslatedChunk } from '../types';
 
@@ -12,10 +12,22 @@ interface EditingInterfaceProps {
     totalPages: number;
     onSubmit: (editedChunks: TranslatedChunk[]) => Promise<void>;
     onNavigate: (page: number) => void;
+    onReviewComplete?: () => void;  // Called when last page is submitted
     isAnalyzing: boolean;
 }
 
 const CHUNKS_PER_PAGE = 4;
+
+// Helper to render markdown images as HTML
+const renderMarkdownContent = (text: string): string => {
+    // Convert markdown images to HTML img tags
+    const withImages = text.replace(
+        /!\[([^\]]*)\]\(([^)]+)\)/g,
+        '<img src="$2" alt="$1" class="max-w-full h-auto rounded-lg my-2 border border-slate-200" loading="lazy" />'
+    );
+    // Also handle line breaks for better display
+    return withImages.replace(/\n/g, '<br/>');
+};
 
 export default function EditingInterface({
     chunks,
@@ -24,11 +36,39 @@ export default function EditingInterface({
     totalPages,
     onSubmit,
     onNavigate,
+    onReviewComplete,
     isAnalyzing,
 }: EditingInterfaceProps) {
     const [editedChunks, setEditedChunks] = useState<TranslatedChunk[]>(chunks);
     const [hasChanges, setHasChanges] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+
+    // Refs for auto-resize textareas
+    const textareaRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
+    const originalRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+    // Auto-resize textarea to match content
+    const autoResizeTextarea = useCallback((textarea: HTMLTextAreaElement | null, originalDiv: HTMLDivElement | null) => {
+        if (!textarea) return;
+
+        // Reset height to auto to get correct scrollHeight
+        textarea.style.height = 'auto';
+
+        // Get the original text container height
+        const originalHeight = originalDiv?.offsetHeight || 0;
+        const scrollHeight = textarea.scrollHeight;
+
+        // Use the larger of scroll height or original container height
+        const targetHeight = Math.max(scrollHeight, originalHeight - 40); // 40px for padding/label
+        textarea.style.height = `${Math.max(120, targetHeight)}px`;
+    }, []);
+
+    // Sync textarea heights on mount and when chunks change
+    useEffect(() => {
+        editedChunks.forEach((_, idx) => {
+            autoResizeTextarea(textareaRefs.current[idx], originalRefs.current[idx]);
+        });
+    }, [editedChunks, autoResizeTextarea]);
 
     // Auto-save to local state every 2 seconds
     useEffect(() => {
@@ -53,15 +93,45 @@ export default function EditingInterface({
     };
 
     const handleSubmit = async () => {
-        if (!hasChanges) return;
+        console.log('[EditingInterface] handleSubmit called', {
+            editedChunksLength: editedChunks?.length,
+            currentPage,
+            totalPages,
+            isSaving,
+            isAnalyzing
+        });
+
+        // Guard: Skip if already saving or no chunks
+        if (isSaving || isAnalyzing) {
+            console.log('[EditingInterface] Already processing, skipping');
+            return;
+        }
+
+        if (!editedChunks || editedChunks.length === 0) {
+            console.log('[EditingInterface] No chunks to submit');
+            return;
+        }
 
         setIsSaving(true);
         try {
             await onSubmit(editedChunks);
             setHasChanges(false);
+
+            // Auto-advance to next page if not on the last page
+            if (currentPage < totalPages - 1) {
+                console.log('[EditingInterface] Navigating to next page');
+                onNavigate(currentPage + 1);
+            } else {
+                console.log('[EditingInterface] Last page submitted - review complete!');
+                // Notify parent that review is complete
+                if (onReviewComplete) {
+                    onReviewComplete();
+                }
+            }
         } catch (error) {
-            console.error('Error submitting edits:', error);
+            console.error('[EditingInterface] Error submitting edits:', error);
         } finally {
+            console.log('[EditingInterface] Submit complete, resetting isSaving');
             setIsSaving(false);
         }
     };
@@ -103,32 +173,38 @@ export default function EditingInterface({
             {/* Aligned Editing List */}
             <div className="space-y-6 mb-6">
                 {editedChunks.map((chunk, idx) => (
-                    <div key={chunk.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col md:grid md:grid-cols-2">
+                    <div key={chunk.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col md:grid md:grid-cols-2 items-stretch">
                         {/* Original (English) */}
-                        <div className="p-4 border-b md:border-b-0 md:border-r border-slate-100 bg-slate-50/50">
+                        <div
+                            ref={(el) => { originalRefs.current[idx] = el; }}
+                            className="p-4 border-b md:border-b-0 md:border-r border-slate-100 bg-slate-50/50"
+                        >
                             <div className="flex items-center gap-2 mb-2">
                                 <span className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">Chunk {chunk.position + 1}</span>
                                 <span className="text-[10px] text-slate-400 px-1.5 py-0.5 bg-slate-100 rounded-full">{chunk.type}</span>
                             </div>
-                            <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
-                                {chunk.text}
-                            </p>
+                            <div
+                                className="text-slate-800 leading-relaxed doc-content"
+                                dangerouslySetInnerHTML={{ __html: renderMarkdownContent(chunk.text) }}
+                            />
                         </div>
 
                         {/* Translation (Editable) */}
                         <div className="p-4 bg-white relative">
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-[10px] uppercase tracking-wider text-emerald-600 font-medium">编辑翻译</span>
-                                {chunk.translation !== chunks[idx].translation && (
+                                {chunks[idx] && chunk.translation !== chunks[idx].translation && (
                                     <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-medium">Modified</span>
                                 )}
                             </div>
                             <textarea
+                                ref={(el) => { textareaRefs.current[idx] = el; }}
                                 value={chunk.translation}
                                 onChange={(e) => handleTextChange(idx, e.target.value)}
+                                onInput={(e) => autoResizeTextarea(e.currentTarget, originalRefs.current[idx])}
                                 placeholder={chunk.translation ? "" : "Translation is empty..."}
-                                className="w-full p-3 bg-white text-slate-800 rounded border border-emerald-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all resize-y font-sans text-sm leading-relaxed"
-                                rows={Math.max(5, chunk.translation.split('\n').length + 1)}
+                                className="w-full p-3 bg-white text-slate-800 rounded border border-emerald-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all resize-y font-sans text-base leading-relaxed doc-content-zh"
+                                style={{ minHeight: '120px', overflow: 'hidden' }}
                             />
                         </div>
                     </div>
@@ -155,7 +231,7 @@ export default function EditingInterface({
                     )}
                     <button
                         onClick={handleSubmit}
-                        disabled={!hasChanges || isSaving || isAnalyzing}
+                        disabled={isSaving || isAnalyzing}
                         className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg font-medium"
                     >
                         {isSaving || isAnalyzing ? (

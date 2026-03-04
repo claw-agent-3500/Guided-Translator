@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import parse, translate, keys, export
+from routers import parse, translate, keys, export, review, glossary, status
 from config import settings
 
 
@@ -19,8 +19,9 @@ from config import settings
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown events."""
     # Startup
-    print("Starting Guided Translator Backend v1.0.0")
+    print("Starting Guided Translator Backend v1.1.0")
     print("API docs available at: http://localhost:8000/docs")
+    print("Features: Rate Limit Handling, Smart Batching, Iterative Translation, Glossary")
     yield
     # Shutdown
     print("Shutting down backend...")
@@ -29,7 +30,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Guided Translator API",
     description="Backend API for terminology-aware technical document translation",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan
 )
 
@@ -54,6 +55,9 @@ app.include_router(parse.router, prefix="/api/parse", tags=["Parsing"])
 app.include_router(translate.router, prefix="/api/translate", tags=["Translation"])
 app.include_router(keys.router, prefix="/api/keys", tags=["API Keys"])
 app.include_router(export.router, prefix="/api/export", tags=["Export"])
+app.include_router(review.router, prefix="/api", tags=["Review"])
+app.include_router(glossary.router, prefix="/api", tags=["Glossary"])
+app.include_router(status.router, tags=["Status"])
 
 
 @app.get("/")
