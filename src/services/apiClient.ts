@@ -569,3 +569,50 @@ export async function retranslateNode(nodeId: number): Promise<void> {
 export async function getDocumentStats(documentId: number): Promise<DocumentStats> {
     return apiFetch<DocumentStats>(`/api/review/stats/${documentId}`);
 }
+
+// ============ Chunk Synchronization ============
+
+export interface BackendChunk {
+    chunk_tag: string;
+    content: string;
+    index: number;
+    translation?: string;
+    state?: string;
+    node_id: number;
+}
+
+export interface ChunkSyncResponse {
+    document_id: number;
+    document_name: string;
+    skeleton: string;
+    chunks: BackendChunk[];
+}
+
+/**
+ * Get document chunks from backend (for synchronized translation)
+ */
+export async function getDocumentChunks(documentId: number): Promise<ChunkSyncResponse> {
+    return apiFetch<ChunkSyncResponse>(`/api/review/document/${documentId}/chunks`);
+}
+
+export interface TranslationSaveItem {
+    chunk_tag: string;
+    translation: string;
+    node_id: number;
+}
+
+/**
+ * Save translations for multiple chunks
+ */
+export async function saveTranslations(
+    documentId: number, 
+    translations: TranslationSaveItem[]
+): Promise<{ success: boolean; message: string }> {
+    return apiFetch<{ success: boolean; message: string }>(
+        `/api/review/document/${documentId}/translations`,
+        {
+            method: 'POST',
+            body: JSON.stringify({ translations }),
+        }
+    );
+}

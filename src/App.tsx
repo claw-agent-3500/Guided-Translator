@@ -19,7 +19,7 @@ import { translateChunks, calculateCoverage, setApiKeys, hasPaidKeys, skipToPaid
 import { analyzeEdit, extractTerminologyChanges, RefinementPattern } from './services/editAnalysisService';
 import { addUserPreference } from './services/userGlossaryService'; // Corrected imports
 import { storageService } from './services/storageService';
-import { exportMarkdown } from './services/apiClient'; // Skeleton export
+import { exportMarkdown, getDocumentChunks, type BackendChunk } from './services/apiClient'; // Skeleton export & chunk sync
 import ApiKeyManager from './components/ApiKeyManager'; // Import Key Manager
 import type { GlossaryEntry, TranslatedChunk, TranslationProgress, AppStatus, Chunk, Project, TokenUsage } from './types';
 import TokenStats from './components/TokenStats'; // Import TokenStats component
@@ -169,9 +169,40 @@ export default function App() {
             await storageService.saveProject(project);
             setCurrentProject(project);
 
-            // Process chunks
-            console.log('[DEBUG] About to call splitIntoChunks with text length:', pendingFile.text?.length);
-            const parsedChunks = splitIntoChunks(pendingFile.text);
+            // Get backend doc ID from loaded document (set by document parser)
+            const backendDocId = loadedDocument?.backendDocId;
+
+            let parsedChunks: Chunk[];
+
+            if (backendDocId) {
+                // USE BACKEND CHUNKS - This ensures sequence matches the skeleton!
+                console.log('[DEBUG] Fetching chunks from backend, doc_id:', backendDocId);
+                try {
+                    const chunkResponse = await getDocumentChunks(backendDocId);
+                    console.log('[DEBUG] Got', chunkResponse.chunks.length, 'chunks from backend');
+                    
+                    // Convert backend chunks to frontend format
+                    // Use chunk_tag as ID (e.g., "CHUNK_001") to match skeleton
+                    parsedChunks = chunkResponse.chunks.map((bc: BackendChunk) => ({
+                        id: bc.chunk_tag,  // Use chunk_tag as ID (e.g., "CHUNK_001")
+                        text: bc.content,
+                        position: bc.index,
+                        type: 'paragraph' as const,  // Default type, can be refined
+                    }));
+                    
+                    console.log('[DEBUG] Using backend chunks, total:', parsedChunks.length);
+                } catch (err) {
+                    console.error('[DEBUG] Failed to fetch backend chunks:', err);
+                    console.log('[DEBUG] Falling back to local chunking');
+                    parsedChunks = splitIntoChunks(pendingFile.text);
+                }
+            } else {
+                // Fallback to local chunking (legacy path)
+                console.log('[DEBUG] No backend doc_id, using local splitIntoChunks');
+                console.log('[DEBUG] About to call splitIntoChunks with text length:', pendingFile.text?.length);
+                parsedChunks = splitIntoChunks(pendingFile.text);
+            }
+
             console.log('[DEBUG] splitIntoChunks returned', parsedChunks.length, 'chunks');
             setChunks(parsedChunks);
             console.log('[DEBUG] setChunks called successfully');

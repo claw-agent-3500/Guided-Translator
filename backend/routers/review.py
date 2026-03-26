@@ -198,3 +198,97 @@ async def batch_approve(node_ids: List[int]):
         success=True,
         message=f"Approved {approved}/{len(node_ids)} nodes"
     )
+
+
+# ==================== Chunk Sync Endpoints ====================
+
+class ChunkSyncResponse(BaseModel):
+    """Response containing document chunks for frontend synchronization."""
+    document_id: int
+    document_name: str
+    skeleton: str
+    chunks: List[dict]  # List of {chunk_tag, content, index}
+
+
+@router.get("/document/{document_id}/chunks", response_model=ChunkSyncResponse)
+async def get_document_chunks(document_id: int):
+    """
+    Get all chunks for a document.
+    
+    This endpoint returns the chunks with their tags so the frontend
+    can synchronize its translation state with the backend.
+    """
+    db = get_database()
+    
+    # Get document info
+    doc = db.get_document(document_id)
+    if not doc:
+        raise HTTPException(404, f"Document {document_id} not found")
+    
+    # Get skeleton
+    skeleton = db.get_skeleton(document_id)
+    
+    # Get all nodes with tags
+    nodes = db.get_document_nodes(document_id)
+    
+    # Build chunks list with proper indexing
+    chunks = []
+    for node in nodes:
+        if node.get("chunk_tag"):  # Only include tagged nodes
+            chunks.append({
+                "chunk_tag": node["chunk_tag"],
+                "content": node["content"],
+                "index": node["idx"],
+                "translation": node.get("translation"),
+                "state": node.get("state"),
+                "node_id": node["id"]
+            })
+    
+    # Sort by index to ensure correct order
+    chunks.sort(key=lambda x: x["index"])
+    
+    return ChunkSyncResponse(
+        document_id=document_id,
+        document_name=doc["name"],
+        skeleton=skeleton or "",
+        chunks=chunks
+    )
+
+
+class TranslationSaveRequest(BaseModel):
+    """Request to save translations for multiple chunks."""
+    translations: List[dict]  # List of {chunk_tag, translation, node_id}
+
+
+@router.post("/document/{document_id}/translations", response_model=ActionResponse)
+async def save_translations(document_id: int, request: TranslationSaveRequest):
+    """
+    Save translations for multiple chunks at once.
+    
+    This allows the frontend to synchronize its translation state
+    with the backend database.
+    """
+    db = get_database()
+    
+    saved = 0
+    for item in request.translations:
+        chunk_tag = item.get("chunk_tag")
+        translation = item.get("translation")
+        node_id = item.get("node_id")
+        
+        if not all([chunk_tag, translation, node_id]):
+            continue
+        
+        # Update node translation and set to review state
+        success = db.update_node_state(
+            node_id=node_id,
+            state=NodeState.REVIEW_REQUIRED,
+            translation=translation
+        )
+        if success:
+            saved += 1
+    
+    return ActionResponse(
+        success=True,
+        message=f"Saved {saved}/{len(request.translations)} translations"
+    )
