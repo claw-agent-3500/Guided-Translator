@@ -2,7 +2,7 @@
 // Display 3-4 chunks at once with side-by-side English/Chinese view
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Edit3, Save, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Edit3, Save, ChevronLeft, ChevronRight, Loader2, Keyboard } from 'lucide-react';
 import type { TranslatedChunk } from '../types';
 
 interface EditingInterfaceProps {
@@ -166,29 +166,43 @@ export default function EditingInterface({
     return (
         <div className="bg-white rounded-lg shadow-lg p-6 max-w-7xl mx-auto">
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3">
-                    <Edit3 className="w-6 h-6 text-blue-600" />
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg">
+                        <Edit3 className="w-6 h-6 text-white" />
+                    </div>
                     <div>
-                        <h2 className="text-2xl font-bold text-slate-800">Edit & Refine Translation</h2>
+                        <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Edit & Refine Translation</h2>
                         <p className="text-sm text-slate-500">
                             Make corrections and the AI will learn your preferences
                         </p>
                     </div>
                 </div>
-                <div className="text-right">
+                
+                {/* Keyboard shortcuts hint */}
+                <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-50 px-3 py-2 rounded-lg">
+                    <Keyboard className="w-4 h-4" />
+                    <span className="hidden sm:inline">⌘← Prev</span>
+                    <span className="hidden sm:inline text-slate-300">|</span>
+                    <span className="hidden sm:inline">⌘→ Next</span>
+                    <span className="hidden sm:inline text-slate-300">|</span>
+                    <span>⌘S Save</span>
+                </div>
+            </div>
+            
+            {/* Progress bar - prominent */}
+            <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
                     <p className="text-sm font-medium text-slate-700">
-                        Chunks {startChunk}-{endChunk} of {allChunks.length}
+                        Progress: Chunks {startChunk}-{endChunk} of {allChunks.length}
                     </p>
-                    <div className="flex items-center gap-2 mt-1">
-                        <div className="w-32 h-2 bg-slate-200 rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-blue-600 transition-all duration-300"
-                                style={{ width: `${progressPercent}%` }}
-                            />
-                        </div>
-                        <span className="text-xs text-slate-500">{progressPercent}%</span>
-                    </div>
+                    <span className="text-sm font-semibold text-blue-600">{progressPercent}%</span>
+                </div>
+                <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
+                    <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-500"
+                        style={{ width: `${progressPercent}%` }}
+                    />
                 </div>
             </div>
 
