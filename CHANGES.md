@@ -62,9 +62,39 @@
 
 ### Remaining Issues for Next Iteration
 
-1. **Component consolidation** - Combine glossary and document uploads
-2. **Accessibility** - Interactive elements need better ARIA labels
-3. **Code organization** - App.tsx ~900 lines; could split
+1. **Component consolidation** - Combine glossary and document uploads ✓ COMPLETED
+2. **Edit mode** - Improve edit/translate mode experience
+3. **Accessibility** - ARIA labels for interactive elements
+4. **Code organization** - Split App.tsx into smaller components
+
+---
+
+## Iteration 4 (2026-03-29)
+
+### What Changed and Why
+
+**1. Component Consolidation - Unified Upload Section**
+- Added unified 'Upload Files' section header with upload icon
+- Added subtitle explaining glossary is optional, document required
+- Wrapped both upload components in a space-y container for better grouping
+- Creates visual cohesion between glossary and document upload areas
+
+### Before/After Behavior
+
+**Before:**
+- GlossaryUpload and DocumentUpload appeared as separate unrelated cards
+- No indication that these are related file upload operations
+
+**After:**
+- Single "Upload Files" section with unified header
+- Clear subtitle explaining optional vs required files
+- Cards visually grouped together as a logical unit
+
+### Remaining Issues for Next Iteration
+
+1. **Edit mode improvements** - Better editing interface UX
+2. **Accessibility** - ARIA labels for interactive elements  
+3. **Code organization** - Split App.tsx
 
 ---
 

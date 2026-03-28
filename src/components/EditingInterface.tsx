@@ -78,6 +78,28 @@ export default function EditingInterface({
         setHasChanges(hasModifications);
     }, [editedChunks, chunks]);
 
+    // Keyboard navigation handler
+    const handleKeyDown = useCallback((e: KeyboardEvent) => {
+        // Cmd/Ctrl + Arrow for navigation
+        if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowRight' && currentPage < totalPages - 1) {
+            e.preventDefault();
+            onNavigate(currentPage + 1);
+        } else if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowLeft' && currentPage > 0) {
+            e.preventDefault();
+            onNavigate(currentPage - 1);
+        } else if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+            e.preventDefault();
+            if (!isSaving && !isAnalyzing && hasChanges) {
+                handleSubmit();
+            }
+        }
+    }, [currentPage, totalPages, onNavigate, isSaving, isAnalyzing, hasChanges]);
+
+    useEffect(() => {
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handleKeyDown]);
+
     // Update local state when chunks prop changes
     useEffect(() => {
         setEditedChunks(chunks);
