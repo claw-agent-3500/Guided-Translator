@@ -24,6 +24,7 @@ import ApiKeyManager from './components/ApiKeyManager'; // Import Key Manager
 import type { GlossaryEntry, TranslatedChunk, TranslationProgress, AppStatus, Chunk, Project, TokenUsage } from './types';
 import TokenStats from './components/TokenStats'; // Import TokenStats component
 import { Book, FileText, Settings, AlertTriangle, Wrench, ClipboardCheck, CheckCircle } from 'lucide-react';
+import WorkflowIndicator from './components/WorkflowIndicator';
 
 export default function App() {
     // Application State
@@ -618,6 +619,16 @@ export default function App() {
             }
 
             <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+                {/* Workflow Progress Indicator */}
+                <WorkflowIndicator
+                    currentStatus={status}
+                    hasGlossary={glossary.length > 0}
+                    hasDocument={chunks.length > 0 || translatedChunks.length > 0}
+                    isTranslating={isTranslating}
+                    translationComplete={status === 'complete'}
+                    inEditMode={editMode}
+                />
+
                 {/* Upload Section */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <GlossaryUpload

@@ -178,7 +178,7 @@ export default function ReviewQueue({ documentId, onNodeUpdated }: ReviewQueuePr
     };
 
     // Render a chunk — HTML table or plain text
-    const renderContent = (text: string | null | undefined, fallback: string = 'No content', isOriginal: boolean = false) => {
+    const renderContent = (text: string | null | undefined, fallback: string = 'No content') => {
         if (!text) return <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>{fallback}</span>;
         if (isHtmlTable(text)) {
             return (
@@ -544,7 +544,7 @@ export default function ReviewQueue({ documentId, onNodeUpdated }: ReviewQueuePr
                                                         color: '#334155',
                                                         border: '1px solid #e2e8f0'
                                                     }}>
-                                                        {renderContent(node.content, 'No content available', true)}
+                                                        {renderContent(node.content, 'No content available')}
                                                     </div>
                                                 </div>
                                             )}
@@ -633,7 +633,7 @@ export default function ReviewQueue({ documentId, onNodeUpdated }: ReviewQueuePr
                                                         border: '1px solid',
                                                         borderColor: node.translation ? '#bbf7d0' : '#fde68a'
                                                     }}>
-                                                        {renderContent(node.translation, 'Translation not available yet', false)}
+                                                        {renderContent(node.translation, 'Translation not available yet')}
                                                     </div>
                                                 )}
                                             </div>
