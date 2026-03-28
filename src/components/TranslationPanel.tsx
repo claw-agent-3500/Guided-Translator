@@ -112,21 +112,21 @@ export default function TranslationPanel({ chunks, isTranslating = false }: Tran
     }
 
     return (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-[700px]">
-            <div className="border-b bg-gray-50 p-4 flex-none grid grid-cols-2 gap-6">
-                <h3 className="font-semibold text-gray-700">Original (English)</h3>
-                <h3 className="font-semibold text-gray-700">Translation (Chinese)</h3>
+        <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-[500px] sm:h-[700px]">
+            <div className="border-b bg-gray-50 p-3 sm:p-4 flex-none grid grid-cols-2 gap-2 sm:gap-6">
+                <h3 className="font-semibold text-gray-700 text-sm sm:text-base">Original (English)</h3>
+                <h3 className="font-semibold text-gray-700 text-sm sm:text-base">Translation (Chinese)</h3>
             </div>
 
-            <div className="flex-grow overflow-y-auto p-6 bg-slate-50/30">
-                <div className="space-y-4">
+            <div className="flex-grow overflow-y-auto p-3 sm:p-6 bg-slate-50/30">
+                <div className="space-y-3 sm:space-y-4">
                     {chunks.map((chunk, index) => (
-                        <div key={chunk.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col md:grid md:grid-cols-2 items-stretch">
+                        <div key={chunk.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col lg:grid lg:grid-cols-2 items-stretch">
                             {/* Original Text */}
-                            <div className="p-4 border-b md:border-b-0 md:border-r border-slate-100 bg-slate-50/50 h-full">
-                                <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-2 font-mono">Chunk {index + 1}</div>
+                            <div className="p-3 sm:p-4 border-b lg:border-b-0 lg:border-r border-slate-100 bg-slate-50/50 h-full">
+                                <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 sm:mb-2 font-mono">Chunk {index + 1}</div>
                                 <div
-                                    className={`doc-content ${chunk.type === 'heading' ? 'font-bold text-lg' : ''}`}
+                                    className={`doc-content text-sm sm:text-base ${chunk.type === 'heading' ? 'font-bold text-lg' : ''}`}
                                     dangerouslySetInnerHTML={{
                                         __html: highlightTerms(chunk.text, chunk.matchedTerms, false)
                                     }}
@@ -134,10 +134,10 @@ export default function TranslationPanel({ chunks, isTranslating = false }: Tran
                             </div>
 
                             {/* Translated Text */}
-                            <div className="p-4 bg-white h-full">
-                                <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-2 font-mono md:text-right">段落 {index + 1}</div>
+                            <div className="p-3 sm:p-4 bg-white h-full">
+                                <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 sm:mb-2 font-mono lg:text-right">段落 {index + 1}</div>
                                 <div
-                                    className={`doc-content doc-content-zh ${chunk.type === 'heading' ? 'font-bold text-lg' : ''}`}
+                                    className={`doc-content doc-content-zh text-sm sm:text-base ${chunk.type === 'heading' ? 'font-bold text-lg' : ''}`}
                                     dangerouslySetInnerHTML={{
                                         __html: highlightTerms(chunk.translation, chunk.matchedTerms, true)
                                     }}
@@ -148,15 +148,15 @@ export default function TranslationPanel({ chunks, isTranslating = false }: Tran
 
                     {/* Skeleton Loader - Appears at bottom when translating */}
                     {isTranslating && (
-                        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col md:grid md:grid-cols-2 animate-pulse">
-                            <div className="p-4 border-r border-slate-100 bg-slate-50/50">
-                                <div className="h-3 w-16 bg-slate-200 rounded mb-4"></div>
+                        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col lg:grid lg:grid-cols-2 animate-pulse">
+                            <div className="p-3 sm:p-4 lg:border-r border-slate-100 bg-slate-50/50">
+                                <div className="h-3 w-16 bg-slate-200 rounded mb-3 sm:mb-4"></div>
                                 <div className="h-4 w-full bg-slate-200 rounded mb-2"></div>
                                 <div className="h-4 w-3/4 bg-slate-200 rounded mb-2"></div>
                                 <div className="h-4 w-5/6 bg-slate-200 rounded"></div>
                             </div>
-                            <div className="p-4 bg-white">
-                                <div className="flex justify-end mb-4">
+                            <div className="p-3 sm:p-4 bg-white">
+                                <div className="flex justify-end mb-3 sm:mb-4">
                                     <div className="h-3 w-16 bg-slate-200 rounded"></div>
                                 </div>
                                 <div className="h-4 w-full bg-slate-200 rounded mb-2"></div>
@@ -168,18 +168,18 @@ export default function TranslationPanel({ chunks, isTranslating = false }: Tran
                 </div>
             </div>
 
-            {/* Legend */}
-            <div className="border-t bg-gray-50 p-4 flex gap-6 text-sm flex-none">
+            {/* Legend - Responsive */}
+            <div className="border-t bg-gray-50 p-3 sm:p-4 flex flex-wrap gap-3 sm:gap-6 text-xs sm:text-sm flex-none">
                 <div className="flex items-center gap-2">
                     <span className="inline-block w-3 h-3 rounded-full bg-emerald-400"></span>
-                    <span className="text-slate-600 font-medium">Glossary Matched</span>
+                    <span className="text-slate-600 font-medium">Glossary</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <span className="inline-block w-3 h-3 rounded-full bg-sky-400"></span>
                     <span className="text-slate-600 font-medium">Auto-Translated</span>
                 </div>
-                <div className="ml-auto text-xs text-slate-400 italic">
-                    Hover over highlighted terms to see the source/translation
+                <div className="ml-auto text-xs text-slate-400 italic hidden sm:block">
+                    Hover to see source
                 </div>
             </div>
         </div>

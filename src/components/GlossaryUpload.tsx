@@ -85,22 +85,22 @@ export default function GlossaryUpload({ onGlossaryLoaded, currentGlossary }: Gl
     const stats = currentGlossary ? getGlossaryStats(currentGlossary) : null;
 
     return (
-        <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center gap-2">
                 <FileText className="w-5 h-5" />
                 Import Glossary
             </h2>
 
             {/* Upload Area */}
             <div
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
+                className={`border-2 border-dashed rounded-lg p-4 sm:p-8 text-center transition-colors ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
                     }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
             >
-                <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                <p className="text-gray-600 mb-2">
+                <Upload className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400" />
+                <p className="text-gray-600 mb-2 text-sm sm:text-base">
                     Drag CSV file here or{' '}
                     <button
                         onClick={() => fileInputRef.current?.click()}
@@ -109,7 +109,7 @@ export default function GlossaryUpload({ onGlossaryLoaded, currentGlossary }: Gl
                         browse
                     </button>
                 </p>
-                <p className="text-sm text-gray-500">CSV format: English, Chinese, Source (optional)</p>
+                <p className="text-xs sm:text-sm text-gray-500">CSV: English, Chinese, Source (optional)</p>
                 <input
                     ref={fileInputRef}
                     type="file"
