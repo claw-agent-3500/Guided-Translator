@@ -1,5 +1,42 @@
 # Guided Translator - Changes Documentation
 
+## Iteration 2 (2026-03-29)
+
+### What Changed and Why
+
+**1. Mobile Responsiveness Improvements**
+- Enhanced header for mobile with better spacing and truncated titles
+- Added responsive grid breakpoints (sm:, xs:) for upload panels
+- Reduced TranslationPanel height on mobile (500px vs 700px)  
+- Improved GlossaryUpload and DocumentUpload mobile padding/sizing
+- Added better touch targets and smaller icons for mobile
+- Added responsive legends and reduced text sizes on small screens
+
+### Before/After Behavior
+
+**Before:**
+- Header text overflowed on small screens
+- Grid always showed 2 columns even on small phones
+- TranslationPanel took up too much vertical space on mobile
+- Upload areas had excessive padding on mobile
+- Legend text was too large for small screens
+
+**After:**
+- Header uses flex with truncation for project titles
+- Grid adapts from 1 column on mobile to 2 on larger screens
+- Panel heights adjust with sm: breakpoint queries
+- Padding reduces from 8 to 4 on mobile (p-4 sm:p-8)
+- Legend text scales down on mobile
+
+### Remaining Issues for Next Iteration
+
+1. **Empty states** - Some components need better empty state messaging
+2. **Component consolidation** - GlossaryUpload and DocumentUpload could be combined
+3. **Accessibility** - Interactive elements need better ARIA labels
+4. **Code organization** - App.tsx ~900 lines; could split into smaller files
+
+---
+
 ## Iteration 1 (2025-03-29)
 
 ### What Changed and Why

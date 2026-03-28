@@ -482,11 +482,30 @@ export default function GlossaryManager({ onTermsUpdated }: GlossaryManagerProps
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                 {loading && terms.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-                        Loading...
+                        <RefreshCw size={24} className="spinning mx-auto mb-3" />
+                        <div>Loading glossary...</div>
                     </div>
                 ) : terms.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-                        No glossary terms. Upload a CSV or add terms manually.
+                    <div style={{ 
+                        textAlign: 'center', 
+                        padding: '40px 20px', 
+                        color: '#888',
+                        backgroundColor: '#1a1a2e',
+                        borderRadius: '8px',
+                        border: '1px dashed #333'
+                    }}>
+                        <Book size={40} className="mx-auto mb-3 opacity-50" />
+                        <div style={{ fontSize: '15px', fontWeight: 500, marginBottom: '8px', color: '#aaa' }}>
+                            No glossary terms yet
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#666', lineHeight: '1.6' }}>
+                            Upload a CSV file with your terminology<br/>
+                            or add terms manually using the form above
+                        </div>
+                        <div style={{ marginTop: '16px', fontSize: '12px', color: '#555', backgroundColor: '#2a2a3e', padding: '8px 12px', borderRadius: '6px', display: 'inline-block' }}>
+                            📋 Suggested CSV format:<br/>
+                            <code style={{ color: '#8b5cf6' }}>English,Chinese,Category</code>
+                        </div>
                     </div>
                 ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
