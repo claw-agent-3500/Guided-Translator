@@ -30,10 +30,41 @@
 
 ### Remaining Issues for Next Iteration
 
-1. **Empty states** - Some components need better empty state messaging
+1. **Empty states** - Some components need better empty state messaging ✓ COMPLETED
 2. **Component consolidation** - GlossaryUpload and DocumentUpload could be combined
 3. **Accessibility** - Interactive elements need better ARIA labels
 4. **Code organization** - App.tsx ~900 lines; could split into smaller files
+
+---
+
+## Iteration 3 (2026-03-29)
+
+### What Changed and Why
+
+**1. Empty States & Error Messaging Improvements**
+- Enhanced empty state in GlossaryManager with helpful instructions and CSV format hint
+- Added better empty state in TranslationPanel with icon and action guidance
+- Improved SavedProjectsPanel empty state messaging
+- Added loading spinner to GlossaryManager
+
+### Before/After Behavior
+
+**Before:**
+- Empty states showed generic "No items found" messages
+- No visual hierarchy or helpful guidance for next steps
+- Loading states lacked spinner animation
+
+**After:**
+- GlossaryManager shows Book icon, step-by-step instructions, and CSV format
+- TranslationPanel shows document icon with clear call-to-action
+- SavedProjectsPanel explains how to start saving projects
+- GlossaryManager loading shows spinning indicator
+
+### Remaining Issues for Next Iteration
+
+1. **Component consolidation** - Combine glossary and document uploads
+2. **Accessibility** - Interactive elements need better ARIA labels
+3. **Code organization** - App.tsx ~900 lines; could split
 
 ---
 

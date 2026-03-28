@@ -629,17 +629,27 @@ export default function App() {
                     inEditMode={editMode}
                 />
 
-                {/* Upload Section - Responsive grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                    <GlossaryUpload
-                        onGlossaryLoaded={handleGlossaryLoaded}
-                        currentGlossary={glossary}
-                    />
-                    <DocumentUpload
-                        onDocumentLoaded={handleDocumentLoaded}
-                        currentDocument={loadedDocument}
-                        apiKeys={availableApiKeys}
-                    />
+                {/* Upload Section - Unified file inputs */}
+                <div className="space-y-4 sm:space-y-6">
+                    <div className="flex items-center gap-2 px-1">
+                        <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <h2 className="text-lg font-semibold text-slate-700">Upload Files</h2>
+                        <span className="text-xs text-slate-400">(Glossary is optional, Document is required)</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                        <GlossaryUpload
+                            onGlossaryLoaded={handleGlossaryLoaded}
+                            currentGlossary={glossary}
+                        />
+                        <DocumentUpload
+                            onDocumentLoaded={handleDocumentLoaded}
+                            currentDocument={loadedDocument}
+                            apiKeys={availableApiKeys}
+                        />
+                    </div>
                 </div>
 
                 {/* Warning Banner */}
