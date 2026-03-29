@@ -222,6 +222,13 @@ export default function StatusDashboard({
                             )}
                         </div>
 
+                        {/* Last update timestamp */}
+                        {lastUpdate && (
+                            <div className="text-xs text-slate-500 text-right mt-2">
+                                Updated: {lastUpdate.toLocaleTimeString()}
+                            </div>
+                        )}
+
                         {/* Connection indicator */}
                         {!isConnected && (
                             <div className="flex items-center gap-2 text-xs text-amber-400 mt-2">

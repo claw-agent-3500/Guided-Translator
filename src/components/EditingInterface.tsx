@@ -1,8 +1,8 @@
 // Editing Interface Component
 // Display 3-4 chunks at once with side-by-side English/Chinese view
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Edit3, Save, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Edit3, Save, ChevronLeft, ChevronRight, Loader2, FileText, Clock } from 'lucide-react';
 import type { TranslatedChunk } from '../types';
 
 interface EditingInterfaceProps {
@@ -92,6 +92,47 @@ export default function EditingInterface({
         setEditedChunks(updated);
     };
 
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ctrl/Cmd + Enter to submit
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                if (!isSaving && !isAnalyzing && editedChunks?.length > 0) {
+                    handleSubmit();
+                }
+            }
+            // Alt + Arrow keys for navigation
+            if (e.altKey && e.key === 'ArrowRight') {
+                e.preventDefault();
+                if (currentPage < totalPages - 1) {
+                    onNavigate(currentPage + 1);
+                }
+            }
+            if (e.altKey && e.key === 'ArrowLeft') {
+                e.preventDefault();
+                if (currentPage > 0) {
+                    onNavigate(currentPage - 1);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isSaving, isAnalyzing, editedChunks, currentPage, totalPages, onNavigate]);
+
+    // Calculate word/character counts
+    const stats = useMemo(() => {
+        let words = 0;
+        let chars = 0;
+        editedChunks?.forEach(chunk => {
+            const text = chunk.translation || '';
+            chars += text.length;
+            words += text.trim() ? text.trim().split(/\s+/).length : 0;
+        });
+        return { words, chars };
+    }, [editedChunks]);
+
     const handleSubmit = async () => {
         console.log('[EditingInterface] handleSubmit called', {
             editedChunksLength: editedChunks?.length,
@@ -166,6 +207,17 @@ export default function EditingInterface({
                             />
                         </div>
                         <span className="text-xs text-slate-500">{progressPercent}%</span>
+                    </div>
+                    {/* Word/Character stats */}
+                    <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
+                        <span className="flex items-center gap-1">
+                            <FileText size={12} />
+                            {stats.words} words
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <Clock size={12} />
+                            {stats.chars} chars
+                        </span>
                     </div>
                 </div>
             </div>
