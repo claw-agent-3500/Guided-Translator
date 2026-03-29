@@ -1,4 +1,4 @@
-// Review Queue Component
+// Review Queue Component - Redesigned for better readability
 // Displays nodes needing review with approve/edit/retranslate actions
 
 import { useState, useEffect, useCallback } from 'react';
@@ -11,7 +11,9 @@ import {
     FileText,
     ChevronDown,
     ChevronUp,
-    RotateCcw
+    RotateCcw,
+    Eye,
+    EyeOff
 } from 'lucide-react';
 import {
     ReviewNode,
@@ -41,6 +43,9 @@ export default function ReviewQueue({ documentId, onNodeUpdated }: ReviewQueuePr
 
     // Expanded nodes
     const [expandedNodes, setExpandedNodes] = useState<Set<number>>(new Set());
+
+    // View mode toggle
+    const [showOriginal, setShowOriginal] = useState(true);
 
     // Load data
     const loadData = useCallback(async () => {
@@ -136,128 +141,188 @@ export default function ReviewQueue({ documentId, onNodeUpdated }: ReviewQueuePr
         });
     };
 
-    // Detect whether text is an HTML table chunk from MinerU
-    const isHtmlTable = (text: string) => /<table[\s>]/i.test(text);
+    // Detect whether text is an HTML table chunk (including orphaned rows/cells)
+    const isHtmlTable = (text: string) => /<table[\s>]|<tr[\s>]|<td[\s>]/i.test(text);
 
-    // Inject scoped table styles into the HTML string so the rendered table
-    // looks good inside the dark review panel without affecting global CSS.
-    const styledTableHtml = (html: string) => `
+    // Inject scoped table styles and ensure <table> wrapper exists
+    const styledTableHtml = (html: string) => {
+        const style = `
         <style>
-            .rq-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+            .rq-table { border-collapse: collapse; width: 100%; font-size: 14px; }
             .rq-table td, .rq-table th {
-                border: 1px solid #444;
-                padding: 6px 10px;
+                border: 1px solid #e2e8f0;
+                padding: 10px 14px;
                 text-align: left;
                 vertical-align: top;
-                line-height: 1.5;
+                line-height: 1.6;
             }
-            .rq-table tr:nth-child(odd)  { background: #1e1e30; }
-            .rq-table tr:nth-child(even) { background: #25253a; }
+            .rq-table tr:nth-child(odd)  { background: #f8fafc; }
+            .rq-table tr:nth-child(even) { background: #ffffff; }
             .rq-table tr:first-child td, .rq-table tr:first-child th {
-                background: #2d2d4a;
+                background: #e0f2fe;
                 font-weight: 600;
-                color: #c4b5fd;
+                color: #0369a1;
             }
         </style>
-        ${html.replace(/<table/gi, '<table class="rq-table"')}
-    `;
+        `;
+        
+        // If the LLM stripped the <table tags, we must wrap it to force layout
+        let finalizedHtml = html;
+        if (!/<table/i.test(html) && /<tr|<td/i.test(html)) {
+            finalizedHtml = `<table class="rq-table">${html}</table>`;
+        } else {
+            finalizedHtml = html.replace(/<table/gi, '<table class="rq-table"');
+        }
+
+        return style + finalizedHtml;
+    };
 
     // Render a chunk — HTML table or plain text
     const renderContent = (text: string | null | undefined, fallback: string = 'No content') => {
-        if (!text) return <span style={{ color: '#666', fontStyle: 'italic' }}>{fallback}</span>;
+        if (!text) return <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>{fallback}</span>;
         if (isHtmlTable(text)) {
             return (
-                <div
-                    style={{ overflowX: 'auto' }}
-                    dangerouslySetInnerHTML={{ __html: styledTableHtml(text) }}
-                />
+                <div style={{ overflowX: 'auto' }}>
+                    <div
+                        dangerouslySetInnerHTML={{ __html: styledTableHtml(text) }}
+                    />
+                </div>
             );
         }
-        return <span style={{ whiteSpace: 'pre-wrap' }}>{text}</span>;
+        return <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{text}</span>;
     };
 
     // Get state badge color
     const getStateBadge = (state: ReviewNode['state']) => {
-        const colors: Record<ReviewNode['state'], { bg: string; text: string }> = {
-            pending: { bg: '#3b82f6', text: 'white' },
-            translating: { bg: '#f59e0b', text: 'white' },
-            review: { bg: '#8b5cf6', text: 'white' },
-            approved: { bg: '#22c55e', text: 'white' },
-            completed: { bg: '#10b981', text: 'white' },
-            failed: { bg: '#ef4444', text: 'white' }
+        const colors: Record<ReviewNode['state'], { bg: string; text: string; label: string }> = {
+            pending: { bg: '#dbeafe', text: '#1d4ed8', label: 'Pending' },
+            translating: { bg: '#fef3c7', text: '#b45309', label: 'Translating' },
+            review: { bg: '#ede9fe', text: '#7c3aed', label: 'In Review' },
+            approved: { bg: '#dcfce7', text: '#15803d', label: 'Approved' },
+            completed: { bg: '#d1fae5', text: '#059669', label: 'Completed' },
+            failed: { bg: '#fee2e2', text: '#dc2626', label: 'Failed' }
         };
-        return colors[state] || { bg: '#666', text: 'white' };
+        return colors[state] || { bg: '#f1f5f9', text: '#475569', label: state };
+    };
+
+    // Expand all / Collapse all
+    const expandAll = () => {
+        setExpandedNodes(new Set(nodes.map(n => n.id)));
+    };
+
+    const collapseAll = () => {
+        setExpandedNodes(new Set());
     };
 
     return (
         <div className="review-queue" style={{
-            backgroundColor: '#1a1a2e',
-            borderRadius: '12px',
-            padding: '20px',
-            color: '#e0e0e0'
+            backgroundColor: '#ffffff',
+            borderRadius: '16px',
+            padding: '24px',
+            color: '#1e293b',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)'
         }}>
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <ClipboardCheck size={24} color="#8b5cf6" />
-                    <h2 style={{ margin: 0, fontSize: '18px' }}>Review Queue</h2>
-                    <span style={{
-                        backgroundColor: nodes.length > 0 ? '#f59e0b' : '#22c55e',
-                        color: 'white',
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        fontSize: '12px'
+            <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between', 
+                marginBottom: '20px',
+                flexWrap: 'wrap',
+                gap: '12px'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                        backgroundColor: '#f0fdf4',
+                        padding: '10px',
+                        borderRadius: '12px'
                     }}>
-                        {nodes.length} pending
-                    </span>
+                        <ClipboardCheck size={24} color="#16a34a" />
+                    </div>
+                    <div>
+                        <h2 style={{ 
+                            margin: 0, 
+                            fontSize: '22px', 
+                            fontWeight: 600,
+                            color: '#0f172a'
+                        }}>
+                            Review Queue
+                        </h2>
+                        <p style={{ 
+                            margin: '4px 0 0 0', 
+                            fontSize: '13px', 
+                            color: '#64748b' 
+                        }}>
+                            Approve or edit translations
+                        </p>
+                    </div>
                 </div>
-                <button
-                    onClick={() => loadData()}
-                    disabled={loading}
-                    style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        color: '#888'
-                    }}
-                    title="Refresh"
-                >
-                    <RefreshCw size={18} className={loading ? 'spinning' : ''} />
-                </button>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {nodes.length > 0 && (
+                        <span style={{
+                            backgroundColor: nodes.length > 0 ? '#fef3c7' : '#dcfce7',
+                            color: nodes.length > 0 ? '#b45309' : '#15803d',
+                            padding: '6px 14px',
+                            borderRadius: '20px',
+                            fontSize: '14px',
+                            fontWeight: 500
+                        }}>
+                            {nodes.length} pending
+                        </span>
+                    )}
+                    <button
+                        onClick={() => loadData()}
+                        disabled={loading}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: loading ? 'wait' : 'pointer',
+                            color: '#64748b',
+                            padding: '8px',
+                            borderRadius: '8px',
+                            transition: 'all 0.2s'
+                        }}
+                        title="Refresh"
+                    >
+                        <RefreshCw size={20} className={loading ? 'spinning' : ''} />
+                    </button>
+                </div>
             </div>
 
             {/* Stats bar */}
             {stats && (
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
-                    gap: '12px',
-                    marginBottom: '16px',
-                    padding: '12px',
-                    backgroundColor: '#2a2a3e',
-                    borderRadius: '8px'
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+                    gap: '16px',
+                    marginBottom: '20px',
+                    padding: '16px',
+                    backgroundColor: '#f8fafc',
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0'
                 }}>
                     <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#8b5cf6' }}>
+                        <div style={{ fontSize: '28px', fontWeight: 700, color: '#7c3aed' }}>
                             {stats.progress_percent}%
                         </div>
-                        <div style={{ fontSize: '11px', color: '#888' }}>Progress</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Progress</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#3b82f6' }}>{stats.pending}</div>
-                        <div style={{ fontSize: '11px', color: '#888' }}>Pending</div>
+                        <div style={{ fontSize: '22px', fontWeight: 600, color: '#3b82f6' }}>{stats.pending}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Pending</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#f59e0b' }}>{stats.review}</div>
-                        <div style={{ fontSize: '11px', color: '#888' }}>Review</div>
+                        <div style={{ fontSize: '22px', fontWeight: 600, color: '#f59e0b' }}>{stats.review}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>In Review</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#22c55e' }}>{stats.approved}</div>
-                        <div style={{ fontSize: '11px', color: '#888' }}>Approved</div>
+                        <div style={{ fontSize: '22px', fontWeight: 600, color: '#22c55e' }}>{stats.approved}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Approved</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ef4444' }}>{stats.failed}</div>
-                        <div style={{ fontSize: '11px', color: '#888' }}>Failed</div>
+                        <div style={{ fontSize: '22px', fontWeight: 600, color: '#ef4444' }}>{stats.failed}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Failed</div>
                     </div>
                 </div>
             )}
@@ -265,255 +330,403 @@ export default function ReviewQueue({ documentId, onNodeUpdated }: ReviewQueuePr
             {/* Error display */}
             {error && (
                 <div style={{
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    border: '1px solid #ef4444',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    marginBottom: '16px',
+                    backgroundColor: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    borderRadius: '12px',
+                    padding: '14px',
+                    marginBottom: '20px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px'
+                    gap: '10px'
                 }}>
-                    <AlertTriangle size={18} color="#ef4444" />
-                    <span>{error}</span>
+                    <AlertTriangle size={20} color="#dc2626" />
+                    <span style={{ color: '#b91c1c', fontSize: '14px' }}>{error}</span>
+                </div>
+            )}
+
+            {/* Toolbar */}
+            {nodes.length > 0 && (
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '16px',
+                    padding: '12px 16px',
+                    backgroundColor: '#f1f5f9',
+                    borderRadius: '10px'
+                }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            onClick={expandAll}
+                            style={{
+                                padding: '6px 12px',
+                                backgroundColor: '#fff',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                fontSize: '13px',
+                                color: '#475569',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                            }}
+                        >
+                            <Eye size={14} /> Expand All
+                        </button>
+                        <button
+                            onClick={collapseAll}
+                            style={{
+                                padding: '6px 12px',
+                                backgroundColor: '#fff',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                fontSize: '13px',
+                                color: '#475569',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                            }}
+                        >
+                            <EyeOff size={14} /> Collapse All
+                        </button>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '13px', color: '#64748b' }}>Show original:</span>
+                        <button
+                            onClick={() => setShowOriginal(!showOriginal)}
+                            style={{
+                                padding: '6px 12px',
+                                backgroundColor: showOriginal ? '#7c3aed' : '#fff',
+                                color: showOriginal ? '#fff' : '#475569',
+                                border: '1px solid',
+                                borderColor: showOriginal ? '#7c3aed' : '#e2e8f0',
+                                borderRadius: '6px',
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {showOriginal ? 'Yes' : 'No'}
+                        </button>
+                    </div>
                 </div>
             )}
 
             {/* Nodes list */}
-            <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
                 {loading && nodes.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-                        Loading...
+                    <div style={{ 
+                        textAlign: 'center', 
+                        padding: '60px 40px', 
+                        color: '#94a3b8',
+                        backgroundColor: '#f8fafc',
+                        borderRadius: '12px'
+                    }}>
+                        <RefreshCw size={32} className="spinning" style={{ marginBottom: '12px' }} />
+                        <div style={{ fontSize: '16px' }}>Loading review queue...</div>
                     </div>
                 ) : nodes.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-                        <Check size={48} color="#22c55e" style={{ marginBottom: '12px' }} />
-                        <div>All translations reviewed!</div>
+                    <div style={{ 
+                        textAlign: 'center', 
+                        padding: '60px 40px', 
+                        backgroundColor: '#f0fdf4',
+                        borderRadius: '12px',
+                        border: '1px solid #bbf7d0'
+                    }}>
+                        <div style={{
+                            backgroundColor: '#dcfce7',
+                            padding: '16px',
+                            borderRadius: '50%',
+                            display: 'inline-flex',
+                            marginBottom: '16px'
+                        }}>
+                            <Check size={32} color="#16a34a" />
+                        </div>
+                        <div style={{ fontSize: '18px', fontWeight: 500, color: '#15803d' }}>
+                            All translations reviewed!
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#16a34a', marginTop: '8px' }}>
+                            Great work! Your document is ready for export.
+                        </div>
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {nodes.map((node) => (
-                            <div key={node.id} style={{
-                                backgroundColor: '#2a2a3e',
-                                borderRadius: '8px',
-                                overflow: 'hidden'
-                            }}>
-                                {/* Node header */}
-                                <div
-                                    onClick={() => toggleExpand(node.id)}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '12px',
-                                        padding: '12px',
-                                        cursor: 'pointer',
-                                        borderBottom: expandedNodes.has(node.id) ? '1px solid #333' : 'none'
-                                    }}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {nodes.map((node) => {
+                            const badge = getStateBadge(node.state);
+                            return (
+                                <div key={node.id} style={{
+                                    backgroundColor: '#ffffff',
+                                    borderRadius: '12px',
+                                    overflow: 'hidden',
+                                    border: '1px solid #e2e8f0',
+                                    transition: 'box-shadow 0.2s'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.08)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.boxShadow = 'none';
+                                }}
                                 >
-                                    <FileText size={16} color="#666" />
-                                    <div style={{ flex: 1 }}>
-                                        <span style={{
-                                            fontSize: '12px',
-                                            color: '#888',
-                                            marginRight: '8px'
-                                        }}>
-                                            #{node.index}
-                                        </span>
-                                        <span style={{
-                                            ...getStateBadge(node.state),
-                                            padding: '2px 6px',
-                                            borderRadius: '4px',
-                                            fontSize: '10px',
-                                            textTransform: 'uppercase'
-                                        }}>
-                                            {node.state}
-                                        </span>
-                                        {node.confidence !== null && (
+                                    {/* Node header */}
+                                    <div
+                                        onClick={() => toggleExpand(node.id)}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            padding: '14px 16px',
+                                            cursor: 'pointer',
+                                            borderBottom: expandedNodes.has(node.id) ? '1px solid #e2e8f0' : 'none',
+                                            backgroundColor: '#f8fafc'
+                                        }}
+                                    >
+                                        <FileText size={18} color="#64748b" />
+                                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px' }}>
                                             <span style={{
-                                                marginLeft: '8px',
-                                                fontSize: '11px',
-                                                color: node.confidence < 0.7 ? '#f59e0b' : '#22c55e'
+                                                fontSize: '14px',
+                                                color: '#64748b',
+                                                fontWeight: 500
                                             }}>
-                                                {Math.round(node.confidence * 100)}% conf
+                                                #{node.index + 1}
                                             </span>
+                                            <span style={{
+                                                padding: '4px 10px',
+                                                borderRadius: '6px',
+                                                fontSize: '12px',
+                                                fontWeight: 500,
+                                                textTransform: 'capitalize',
+                                                backgroundColor: badge.bg,
+                                                color: badge.text
+                                            }}>
+                                                {badge.label}
+                                            </span>
+                                            {node.confidence !== null && (
+                                                <span style={{
+                                                    fontSize: '13px',
+                                                    color: node.confidence < 0.7 ? '#f59e0b' : '#22c55e',
+                                                    fontWeight: 500
+                                                }}>
+                                                    {Math.round(node.confidence * 100)}% confidence
+                                                </span>
+                                            )}
+                                        </div>
+                                        {expandedNodes.has(node.id) ? (
+                                            <ChevronUp size={18} color="#64748b" />
+                                        ) : (
+                                            <ChevronDown size={18} color="#64748b" />
                                         )}
                                     </div>
-                                    {expandedNodes.has(node.id) ? (
-                                        <ChevronUp size={16} color="#666" />
-                                    ) : (
-                                        <ChevronDown size={16} color="#666" />
-                                    )}
-                                </div>
 
-                                {/* Expanded content */}
-                                {expandedNodes.has(node.id) && (
-                                    <div style={{ padding: '12px' }}>
-                                        {/* Original text */}
-                                        <div style={{ marginBottom: '12px' }}>
-                                            <div style={{
-                                                fontSize: '11px',
-                                                color: '#888',
-                                                marginBottom: '4px'
-                                            }}>
-                                                Original:
-                                            </div>
-                                            <div className="review-content" style={{
-                                                padding: '10px',
-                                                backgroundColor: '#1a1a2e',
-                                                borderRadius: '6px',
-                                                lineHeight: '1.7'
-                                            }}>
-                                                {renderContent(node.content)}
-                                            </div>
-                                        </div>
-
-                                        {/* Translation (editable) */}
-                                        <div style={{ marginBottom: '12px' }}>
-                                            <div style={{
-                                                fontSize: '11px',
-                                                color: '#888',
-                                                marginBottom: '4px'
-                                            }}>
-                                                Translation:
-                                            </div>
-                                            {editingNodeId === node.id ? (
-                                                <div>
-                                                    <textarea
-                                                        className="review-textarea"
-                                                        value={editText}
-                                                        onChange={(e) => setEditText(e.target.value)}
-                                                        style={{
-                                                            width: '100%',
-                                                            minHeight: '100px',
-                                                            padding: '12px',
-                                                            backgroundColor: '#1a1a2e',
-                                                            border: '1px solid #8b5cf6',
-                                                            borderRadius: '6px',
-                                                            color: '#e0e0e0',
-                                                            outline: 'none',
-                                                            resize: 'vertical'
-                                                        }}
-                                                    />
-                                                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                                                        <button
-                                                            onClick={() => handleEditSubmit(node.id)}
-                                                            disabled={loading}
-                                                            style={{
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: '4px',
-                                                                padding: '6px 12px',
-                                                                backgroundColor: '#22c55e',
-                                                                color: 'white',
-                                                                border: 'none',
-                                                                borderRadius: '4px',
-                                                                cursor: 'pointer',
-                                                                fontSize: '12px'
-                                                            }}
-                                                        >
-                                                            <Check size={14} />
-                                                            Save
-                                                        </button>
-                                                        <button
-                                                            onClick={cancelEdit}
-                                                            style={{
-                                                                padding: '6px 12px',
-                                                                backgroundColor: '#444',
-                                                                color: '#e0e0e0',
-                                                                border: 'none',
-                                                                borderRadius: '4px',
-                                                                cursor: 'pointer',
-                                                                fontSize: '12px'
-                                                            }}
-                                                        >
-                                                            Cancel
-                                                        </button>
+                                    {/* Expanded content */}
+                                    {expandedNodes.has(node.id) && (
+                                        <div style={{ padding: '20px' }}>
+                                            {/* Original text */}
+                                            {showOriginal && (
+                                                <div style={{ marginBottom: '16px' }}>
+                                                    <div style={{
+                                                        fontSize: '12px',
+                                                        fontWeight: 600,
+                                                        color: '#64748b',
+                                                        marginBottom: '8px',
+                                                        textTransform: 'uppercase',
+                                                        letterSpacing: '0.5px'
+                                                    }}>
+                                                        📄 Original (English)
+                                                    </div>
+                                                    <div style={{
+                                                        padding: '16px',
+                                                        backgroundColor: '#f8fafc',
+                                                        borderRadius: '10px',
+                                                        fontSize: '15px',
+                                                        lineHeight: '1.75',
+                                                        color: '#334155',
+                                                        border: '1px solid #e2e8f0'
+                                                    }}>
+                                                        {renderContent(node.content, 'No content available')}
                                                     </div>
                                                 </div>
-                                            ) : (
-                                                <div className="review-content" style={{
-                                                    padding: '12px',
-                                                    backgroundColor: '#1a1a2e',
-                                                    borderRadius: '6px',
-                                                    lineHeight: '1.7',
-                                                    color: node.translation ? '#e0e0e0' : '#666',
-                                                    fontStyle: node.translation ? 'normal' : 'italic'
+                                            )}
+
+                                            {/* Translation */}
+                                            <div style={{ marginBottom: '16px' }}>
+                                                <div style={{
+                                                    fontSize: '12px',
+                                                    fontWeight: 600,
+                                                    color: '#64748b',
+                                                    marginBottom: '8px',
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.5px'
                                                 }}>
-                                                    {renderContent(node.translation, 'No translation yet')}
+                                                    🈯 Translation {node.translation ? '' : '(pending)'}
+                                                </div>
+                                                {editingNodeId === node.id ? (
+                                                    <div>
+                                                        <textarea
+                                                            className="review-textarea"
+                                                            value={editText}
+                                                            onChange={(e) => setEditText(e.target.value)}
+                                                            placeholder="Enter your translation..."
+                                                            style={{
+                                                                width: '100%',
+                                                                minHeight: '120px',
+                                                                padding: '16px',
+                                                                backgroundColor: '#ffffff',
+                                                                border: '2px solid #7c3aed',
+                                                                borderRadius: '10px',
+                                                                color: '#1e293b',
+                                                                fontSize: '15px',
+                                                                lineHeight: '1.7',
+                                                                outline: 'none',
+                                                                resize: 'vertical',
+                                                                fontFamily: "'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif"
+                                                            }}
+                                                        />
+                                                        <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+                                                            <button
+                                                                onClick={() => handleEditSubmit(node.id)}
+                                                                disabled={loading || !editText.trim()}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '6px',
+                                                                    padding: '10px 18px',
+                                                                    backgroundColor: editText.trim() ? '#22c55e' : '#94a3b8',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    borderRadius: '8px',
+                                                                    cursor: editText.trim() ? 'pointer' : 'not-allowed',
+                                                                    fontSize: '14px',
+                                                                    fontWeight: 500
+                                                                }}
+                                                            >
+                                                                <Check size={16} />
+                                                                Save Changes
+                                                            </button>
+                                                            <button
+                                                                onClick={cancelEdit}
+                                                                style={{
+                                                                    padding: '10px 18px',
+                                                                    backgroundColor: '#fff',
+                                                                    color: '#475569',
+                                                                    border: '1px solid #e2e8f0',
+                                                                    borderRadius: '8px',
+                                                                    cursor: 'pointer',
+                                                                    fontSize: '14px',
+                                                                    fontWeight: 500
+                                                                }}
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{
+                                                        padding: '16px',
+                                                        backgroundColor: node.translation ? '#f0fdf4' : '#fffbeb',
+                                                        borderRadius: '10px',
+                                                        fontSize: '15px',
+                                                        lineHeight: '1.75',
+                                                        color: node.translation ? '#1e293b' : '#94a3b8',
+                                                        fontStyle: node.translation ? 'normal' : 'italic',
+                                                        border: '1px solid',
+                                                        borderColor: node.translation ? '#bbf7d0' : '#fde68a'
+                                                    }}>
+                                                        {renderContent(node.translation, 'Translation not available yet')}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Actions */}
+                                            {editingNodeId !== node.id && (
+                                                <div style={{ 
+                                                    display: 'flex', 
+                                                    gap: '10px', 
+                                                    paddingTop: '8px',
+                                                    borderTop: '1px solid #e2e8f0'
+                                                }}>
+                                                    <button
+                                                        onClick={() => handleApprove(node.id)}
+                                                        disabled={loading || !node.translation}
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            padding: '10px 18px',
+                                                            backgroundColor: node.translation ? '#22c55e' : '#f1f5f9',
+                                                            color: node.translation ? 'white' : '#94a3b8',
+                                                            border: 'none',
+                                                            borderRadius: '8px',
+                                                            cursor: node.translation ? 'pointer' : 'not-allowed',
+                                                            fontSize: '14px',
+                                                            fontWeight: 500
+                                                        }}
+                                                    >
+                                                        <Check size={16} />
+                                                        Approve
+                                                    </button>
+                                                    <button
+                                                        onClick={() => startEdit(node)}
+                                                        disabled={loading}
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            padding: '10px 18px',
+                                                            backgroundColor: '#7c3aed',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '8px',
+                                                            cursor: 'pointer',
+                                                            fontSize: '14px',
+                                                            fontWeight: 500
+                                                        }}
+                                                    >
+                                                        <Edit2 size={16} />
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleRetranslate(node.id)}
+                                                        disabled={loading}
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            padding: '10px 18px',
+                                                            backgroundColor: '#fff',
+                                                            color: '#f59e0b',
+                                                            border: '1px solid #fbbf24',
+                                                            borderRadius: '8px',
+                                                            cursor: 'pointer',
+                                                            fontSize: '14px',
+                                                            fontWeight: 500
+                                                        }}
+                                                    >
+                                                        <RotateCcw size={16} />
+                                                        Retranslate
+                                                    </button>
                                                 </div>
                                             )}
                                         </div>
-
-                                        {/* Actions */}
-                                        {editingNodeId !== node.id && (
-                                            <div style={{ display: 'flex', gap: '8px' }}>
-                                                <button
-                                                    onClick={() => handleApprove(node.id)}
-                                                    disabled={loading || !node.translation}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        padding: '6px 12px',
-                                                        backgroundColor: node.translation ? '#22c55e' : '#444',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        borderRadius: '4px',
-                                                        cursor: node.translation ? 'pointer' : 'not-allowed',
-                                                        fontSize: '12px',
-                                                        opacity: node.translation ? 1 : 0.5
-                                                    }}
-                                                >
-                                                    <Check size={14} />
-                                                    Approve
-                                                </button>
-                                                <button
-                                                    onClick={() => startEdit(node)}
-                                                    disabled={loading}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        padding: '6px 12px',
-                                                        backgroundColor: '#8b5cf6',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        borderRadius: '4px',
-                                                        cursor: 'pointer',
-                                                        fontSize: '12px'
-                                                    }}
-                                                >
-                                                    <Edit2 size={14} />
-                                                    Edit
-                                                </button>
-                                                <button
-                                                    onClick={() => handleRetranslate(node.id)}
-                                                    disabled={loading}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        padding: '6px 12px',
-                                                        backgroundColor: '#f59e0b',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        borderRadius: '4px',
-                                                        cursor: 'pointer',
-                                                        fontSize: '12px'
-                                                    }}
-                                                >
-                                                    <RotateCcw size={14} />
-                                                    Retranslate
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </div>
+
+            {/* CSS for spinning animation */}
+            <style>{`
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+                .spinning {
+                    animation: spin 1s linear infinite;
+                }
+            `}</style>
         </div>
     );
 }

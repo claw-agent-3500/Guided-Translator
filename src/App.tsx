@@ -19,11 +19,12 @@ import { translateChunks, calculateCoverage, setApiKeys, hasPaidKeys, skipToPaid
 import { analyzeEdit, extractTerminologyChanges, RefinementPattern } from './services/editAnalysisService';
 import { addUserPreference } from './services/userGlossaryService'; // Corrected imports
 import { storageService } from './services/storageService';
-import { exportMarkdown } from './services/apiClient'; // Skeleton export
+import { exportMarkdown, getDocumentChunks, type BackendChunk } from './services/apiClient'; // Skeleton export & chunk sync
 import ApiKeyManager from './components/ApiKeyManager'; // Import Key Manager
 import type { GlossaryEntry, TranslatedChunk, TranslationProgress, AppStatus, Chunk, Project, TokenUsage } from './types';
 import TokenStats from './components/TokenStats'; // Import TokenStats component
 import { Book, FileText, Settings, AlertTriangle, Wrench, ClipboardCheck, CheckCircle } from 'lucide-react';
+import WorkflowIndicator from './components/WorkflowIndicator';
 
 export default function App() {
     // Application State
@@ -169,9 +170,40 @@ export default function App() {
             await storageService.saveProject(project);
             setCurrentProject(project);
 
-            // Process chunks
-            console.log('[DEBUG] About to call splitIntoChunks with text length:', pendingFile.text?.length);
-            const parsedChunks = splitIntoChunks(pendingFile.text);
+            // Get backend doc ID from loaded document (set by document parser)
+            const backendDocId = loadedDocument?.backendDocId;
+
+            let parsedChunks: Chunk[];
+
+            if (backendDocId) {
+                // USE BACKEND CHUNKS - This ensures sequence matches the skeleton!
+                console.log('[DEBUG] Fetching chunks from backend, doc_id:', backendDocId);
+                try {
+                    const chunkResponse = await getDocumentChunks(backendDocId);
+                    console.log('[DEBUG] Got', chunkResponse.chunks.length, 'chunks from backend');
+                    
+                    // Convert backend chunks to frontend format
+                    // Use chunk_tag as ID (e.g., "CHUNK_001") to match skeleton
+                    parsedChunks = chunkResponse.chunks.map((bc: BackendChunk) => ({
+                        id: bc.chunk_tag,  // Use chunk_tag as ID (e.g., "CHUNK_001")
+                        text: bc.content,
+                        position: bc.index,
+                        type: 'paragraph' as const,  // Default type, can be refined
+                    }));
+                    
+                    console.log('[DEBUG] Using backend chunks, total:', parsedChunks.length);
+                } catch (err) {
+                    console.error('[DEBUG] Failed to fetch backend chunks:', err);
+                    console.log('[DEBUG] Falling back to local chunking');
+                    parsedChunks = splitIntoChunks(pendingFile.text);
+                }
+            } else {
+                // Fallback to local chunking (legacy path)
+                console.log('[DEBUG] No backend doc_id, using local splitIntoChunks');
+                console.log('[DEBUG] About to call splitIntoChunks with text length:', pendingFile.text?.length);
+                parsedChunks = splitIntoChunks(pendingFile.text);
+            }
+
             console.log('[DEBUG] splitIntoChunks returned', parsedChunks.length, 'chunks');
             setChunks(parsedChunks);
             console.log('[DEBUG] setChunks called successfully');
@@ -512,18 +544,18 @@ export default function App() {
         <div className="min-h-screen bg-slate-100 font-sans text-slate-900">
             {/* Header */}
             <header className="bg-white border-b sticky top-0 z-10">
-                <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-blue-600 p-2 rounded-lg">
-                            <Book className="w-6 h-6 text-white" />
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 sm:gap-4">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <div className="bg-blue-600 p-1.5 sm:p-2 rounded-lg flex-shrink-0">
+                            <Book className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
                         </div>
-                        <div>
-                            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Guided Translator</h1>
-                            <p className="text-sm text-slate-500 font-medium">Terminology-Aware Technical Translation</p>
+                        <div className="min-w-0">
+                            <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight truncate">Guided Translator</h1>
+                            <p className="text-xs sm:text-sm text-slate-500 font-medium hidden xs:block">Terminology-Aware</p>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                         {currentProject && (
                             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full border border-blue-100">
                                 <FileText className="w-3 h-3 text-blue-600" />
@@ -532,41 +564,41 @@ export default function App() {
                                 </span>
                             </div>
                         )}
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${status === 'idle' && chunks.length > 0 ? 'bg-emerald-100 text-emerald-700' :
+                        <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${status === 'idle' && chunks.length > 0 ? 'bg-emerald-100 text-emerald-700' :
                             status === 'processing' || status === 'translating' ? 'bg-amber-100 text-amber-700' :
                                 status === 'complete' ? 'bg-blue-100 text-blue-700' :
                                     'bg-slate-100 text-slate-600'
                             }`}>
-                            {status === 'idle' && chunks.length === 0 && 'Ready to Upload'}
-                            {status === 'idle' && chunks.length > 0 && 'Document Ready'}
-                            {status === 'processing' && 'Analyzing Document...'}
+                            {status === 'idle' && chunks.length === 0 && 'Ready'}
+                            {status === 'idle' && chunks.length > 0 && 'Ready'}
+                            {status === 'processing' && 'Analyzing...'}
                             {status === 'translating' && 'Translating...'}
-                            {status === 'complete' && 'AI Translation Complete'}
+                            {status === 'complete' && 'Complete'}
                         </span>
 
-                        {/* Projects Toggle */}
+                        {/* Mobile-friendly buttons */}
                         <button
                             onClick={() => setShowProjectsPanel(true)}
-                            className="flex items-center gap-2 px-3 py-2 text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors"
+                            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors"
                             title="Saved Projects"
+                            aria-label="Open saved projects"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                             </svg>
-                            <span className="hidden sm:inline font-medium">Projects</span>
+                            <span className="hidden sm:inline font-medium text-sm">Projects</span>
                         </button>
 
-                        {/* Tools Toggle (Glossary & Review) */}
                         <button
                             onClick={() => setShowToolsPanel(true)}
-                            className="flex items-center gap-2 px-3 py-2 text-slate-600 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 text-slate-600 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
                             title="Tools"
+                            aria-label="Open tools panel"
                         >
-                            <Wrench className="w-5 h-5" />
-                            <span className="hidden sm:inline font-medium">Tools</span>
+                            <Wrench className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <span className="hidden sm:inline font-medium text-sm">Tools</span>
                         </button>
 
-                        {/* API Key Manager */}
                         <ApiKeyManager
                             onKeysUpdated={handleApiKeysUpdated}
                             initialKeys={JSON.parse(localStorage.getItem('gemini_api_keys') || '[]')}
@@ -587,17 +619,37 @@ export default function App() {
             }
 
             <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-                {/* Upload Section */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <GlossaryUpload
-                        onGlossaryLoaded={handleGlossaryLoaded}
-                        currentGlossary={glossary}
-                    />
-                    <DocumentUpload
-                        onDocumentLoaded={handleDocumentLoaded}
-                        currentDocument={loadedDocument}
-                        apiKeys={availableApiKeys}
-                    />
+                {/* Workflow Progress Indicator */}
+                <WorkflowIndicator
+                    currentStatus={status}
+                    hasGlossary={glossary.length > 0}
+                    hasDocument={chunks.length > 0 || translatedChunks.length > 0}
+                    isTranslating={isTranslating}
+                    translationComplete={status === 'complete'}
+                    inEditMode={editMode}
+                />
+
+                {/* Upload Section - Unified file inputs */}
+                <div className="space-y-4 sm:space-y-6">
+                    <div className="flex items-center gap-2 px-1">
+                        <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <h2 className="text-lg font-semibold text-slate-700">Upload Files</h2>
+                        <span className="text-xs text-slate-400">(Glossary is optional, Document is required)</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                        <GlossaryUpload
+                            onGlossaryLoaded={handleGlossaryLoaded}
+                            currentGlossary={glossary}
+                        />
+                        <DocumentUpload
+                            onDocumentLoaded={handleDocumentLoaded}
+                            currentDocument={loadedDocument}
+                            apiKeys={availableApiKeys}
+                        />
+                    </div>
                 </div>
 
                 {/* Warning Banner */}

@@ -35,7 +35,6 @@ export default function StatusDashboard({
     const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
     const [isConnected, setIsConnected] = useState(false);
     const [statuses, setStatuses] = useState<StatusData | null>(null);
-    const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
     // Connect to SSE stream
     useEffect(() => {
@@ -55,14 +54,13 @@ export default function StatusDashboard({
                     try {
                         const data = JSON.parse(event.data) as StatusData;
                         setStatuses(data);
-                        setLastUpdate(new Date());
                     } catch (e) {
                         console.error('[StatusDashboard] Failed to parse status:', e);
                     }
                 });
 
                 eventSource.addEventListener('heartbeat', () => {
-                    setLastUpdate(new Date());
+                    // Heartbeat received - connection is alive
                 });
 
                 eventSource.onerror = () => {

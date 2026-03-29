@@ -94,9 +94,12 @@ export default function SavedProjectsPanel({ isOpen, onClose, onLoadProject, cur
                                 <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
                             </div>
                         ) : projects.length === 0 ? (
-                            <div className="text-center py-8 text-slate-400">
-                                <FolderOpen className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                                <p>No saved projects found</p>
+                            <div className="text-center py-8 px-4">
+                                <FolderOpen className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                                <p className="text-slate-600 font-medium mb-1">No saved projects</p>
+                                <p className="text-slate-400 text-sm">
+                                    Upload and translate a document to start saving progress
+                                </p>
                             </div>
                         ) : (
                             projects.map(project => (

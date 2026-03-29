@@ -93,23 +93,23 @@ export default function DocumentUpload({ onDocumentLoaded, currentDocument, apiK
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center gap-2">
                 <File className="w-5 h-5" />
                 Upload Document
             </h2>
 
             {/* Upload Area or Processing State */}
             {isProcessing ? (
-                <div className="border-2 border-blue-100 bg-blue-50/50 rounded-lg p-12 text-center flex flex-col items-center justify-center min-h-[300px]">
-                    <div className="relative mb-6">
+                <div className="border-2 border-blue-100 bg-blue-50/50 rounded-lg p-6 sm:p-12 text-center flex flex-col items-center justify-center min-h-[250px] sm:min-h-[300px]">
+                    <div className="relative mb-4 sm:mb-6">
                         <div className="absolute inset-0 bg-blue-200 rounded-full animate-ping opacity-25"></div>
-                        <div className="relative bg-white p-4 rounded-full shadow-sm border border-blue-100">
-                            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                        <div className="relative bg-white p-3 sm:p-4 rounded-full shadow-sm border border-blue-100">
+                            <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 animate-spin" />
                         </div>
                     </div>
 
-                    <h3 className="text-lg font-semibold text-slate-800 mb-2">
+                    <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-2">
                         {progress.total > 0 ? 'Analyzing Document' : 'Processing File'}
                     </h3>
 
@@ -123,14 +123,14 @@ export default function DocumentUpload({ onDocumentLoaded, currentDocument, apiK
                         </div>
                     )}
 
-                    <p className="text-slate-600 mb-6 max-w-xs mx-auto">
+                    <p className="text-slate-600 mb-4 sm:mb-6 max-w-xs mx-auto text-sm sm:text-base">
                         {progress.total > 0
-                            ? `Extracting text from page ${progress.current} of ${progress.total}...`
-                            : 'Please wait while we prepare your document structure...'}
+                            ? `Page ${progress.current} of ${progress.total}...`
+                            : 'Preparing document structure...'}
                     </p>
 
                     {progress.total > 0 && (
-                        <div className="w-full max-w-md bg-white rounded-full h-3 border border-blue-100 overflow-hidden">
+                        <div className="w-full max-w-md bg-white rounded-full h-2 sm:h-3 border border-blue-100 overflow-hidden">
                             <div
                                 className="bg-blue-600 h-full rounded-full transition-all duration-300 ease-out"
                                 style={{ width: `${(progress.current / progress.total) * 100}%` }}
@@ -140,15 +140,15 @@ export default function DocumentUpload({ onDocumentLoaded, currentDocument, apiK
                 </div>
             ) : (
                 <div
-                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors min-h-[300px] flex flex-col items-center justify-center ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
+                    className={`border-2 border-dashed rounded-lg p-4 sm:p-8 text-center transition-colors min-h-[250px] sm:min-h-[300px] flex flex-col items-center justify-center ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
                         }`}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
                 >
-                    <FileUp className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                    <p className="text-gray-600 mb-2">
-                        Drag PDF or Markdown file here or{' '}
+                    <FileUp className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400" />
+                    <p className="text-gray-600 mb-2 text-sm sm:text-base">
+                        Drag PDF or Markdown here or{' '}
                         <button
                             onClick={() => fileInputRef.current?.click()}
                             className="text-blue-600 hover:underline font-medium"
@@ -156,10 +156,10 @@ export default function DocumentUpload({ onDocumentLoaded, currentDocument, apiK
                             browse
                         </button>
                     </p>
-                    <p className="text-sm text-gray-500">Maximum file size: 50MB</p>
+                    <p className="text-xs sm:text-sm text-gray-500">Max size: 50MB</p>
 
                     {/* MinerU Toggle */}
-                    <label className="mt-4 flex items-center gap-2 cursor-pointer bg-gray-50 px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                    <label className="mt-4 flex items-center gap-2 cursor-pointer bg-gray-50 px-3 sm:px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
                         <input
                             type="checkbox"
                             checked={useMinerU}
@@ -167,7 +167,7 @@ export default function DocumentUpload({ onDocumentLoaded, currentDocument, apiK
                             className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                         />
                         <span className="text-sm text-gray-700">
-                            Use MinerU <span className="text-gray-500">(Recommended for complex PDFs)</span>
+                            MinerU <span className="text-gray-500 hidden sm:inline">(complex PDFs)</span>
                         </span>
                     </label>
 
